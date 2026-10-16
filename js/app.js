@@ -138,7 +138,7 @@ function renderVisits() {
 function collect() {
   return {
     child: { name: $('#name').value.trim(), sex: $('#sex').value, answers: state.answers, motivators: state.motivators, interests: state.interests, attainment: state.attainment, transition: state.transition },
-    family: { outcode: $('#outcode').value, priorities: Object.fromEntries(PRIORITIES.map(([id]) => [id, +$('#p_' + id).value])), sizePref: $('#sizePref').value, discipline: $('#discipline').value, faith: $('#faith').value, gender: $('#gender').value },
+    family: { outcode: $('#outcode').value, priorities: Object.fromEntries(PRIORITIES.map(([id]) => [id, +$('#p_' + id).value])), sizePref: $('#sizePref').value, discipline: $('#discipline').value, faith: $('#faith').value, gender: $('#gender').value, prioritiesSet: Object.keys(state.priorities).length > 0 },
     shortlist: state.shortlist, visits: state.visits, outcodes: OUTCODES,
   };
 }

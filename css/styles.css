@@ -113,7 +113,14 @@ fieldset.radios legend,.dimset legend{font-weight:650;margin-bottom:6px;padding:
 .band.strong{background:var(--strong-bg);color:var(--strong)}
 .band.good{background:var(--good-bg);color:var(--good)}
 .band.mixed{background:var(--mid-bg);color:var(--mid)}
-.band.weaker,.band.not{background:var(--weak-bg);color:var(--weak)}
+.drivers summary{cursor:pointer;color:var(--blue);font-weight:650;margin-top:8px}
+.drivers table{margin:6px 0}
+.share{display:inline-block;width:70px;height:6px;background:var(--line);border-radius:3px;vertical-align:middle;overflow:hidden}
+.share span{display:block;height:100%;background:var(--blue)}
+.rate{font-weight:650;font-size:12px}
+.rate.r4,.rate.r3{color:var(--good)}.rate.r2{color:var(--mid)}.rate.r1,.rate.r0{color:var(--weak)}
+.notice.warn{border-left-color:var(--mid);background:var(--mid-bg)}
+.band.weaker,.band.none,.band.not{background:var(--weak-bg);color:var(--weak)}
 .table-wrap{overflow-x:auto}
 table{border-collapse:collapse;width:100%;font-size:13px}
 td,th{padding:8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}

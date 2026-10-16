@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { SCHOOLS, OUTCODES } from '../js/data/schools.js';
-import { evaluate, scoreProfile, buildContext, normaliseOutcode, transitionOutlook } from '../js/engine.js';
+import { evaluate, scoreProfile, buildContext, normaliseOutcode, transitionOutlook, schoolFactors } from '../js/engine.js';
 import { renderReport } from '../js/report.js';
 import { buildPrompts, allPromptsText } from '../js/prompts.js';
 import { PERSONAS, inputFor } from './personas.mjs';
@@ -155,4 +155,39 @@ test('prompt privacy options are respected', () => {
   assert.match(wb.find(p => p.id === 'context').text, /picked on/i);
   assert.ok(!/picked on/i.test(wb.find(p => p.id === 'research-147072').text), 'research prompts never carry wellbeing details');
   assert.equal(buildPrompts(evaluate({}, SCHOOLS, ctx)).length, 0, 'no shortlist, no prompts');
+});
+
+test('no child details: ratings are a data comparison, not a match', () => {
+  const r = evaluate({ shortlist: ['136856', '141705'], family: { prioritiesSet: false }, outcodes: OUTCODES }, SCHOOLS, ctx); // Gordano, Fairfield
+  assert.equal(r.mode, 'data');
+  assert.ok(r.schools.every(e => / on the data$|Not enough/.test(e.band)), 'no "match" wording');
+  const t = text(renderReport(r));
+  assert.match(t, /Compared on published data only/);
+  assert.match(t, /standard weights/);
+  assert.match(t, /Strengths on the data/);
+  assert.doesNotMatch(t, /closest fit/);
+  assert.match(t, /comes out ahead/, 'a clearly weaker runner-up is not paired with the leader');
+  const withChild = run('anxiousSensitive');
+  assert.equal(withChild.mode, 'child');
+  assert.ok(withChild.schools.every(e => / match$/.test(e.band)));
+});
+
+test('persistent absence is judged against similar intakes', () => {
+  // Two schools with the same raw absence: the one with the more deprived intake should look calmer.
+  const base = SCHOOLS.find(s => s.urn === '141705');
+  const affluent = { ...base, urn: 'x1', fsm: 8, ofstedAreas: null };
+  const deprived = { ...base, urn: 'x2', fsm: 45, ofstedAreas: null };
+  const fa = schoolFactors(affluent, ctx), fd = schoolFactors(deprived, ctx);
+  assert.ok(fd.calm > fa.calm + 0.05, `deprived-intake school should score calmer (${fd.calm} vs ${fa.calm})`);
+  assert.ok(fd.paResid < fa.paResid);
+});
+
+test('every rating explains what drove it', () => {
+  for (const e of run('brightIndependent').schools) {
+    const total = e.drivers.reduce((t, d) => t + d.share, 0);
+    assert.ok(Math.abs(total - 1) < 1e-9, 'shares sum to 100%');
+    assert.ok(e.drivers.every((d, i, a) => i === 0 || a[i - 1].share >= d.share), 'sorted by weight');
+    assert.ok(e.drivers.every(d => d.label && !/^[a-z]+[A-Z]/.test(d.label)), 'human-readable labels');
+  }
+  assert.match(renderReport(run('brightIndependent')), /What drove this rating/);
 });

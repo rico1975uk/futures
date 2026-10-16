@@ -151,19 +151,26 @@ export function deriveNeeds(child) {
 }
 
 // ---------- 3. school factors ----------
-export function buildContext(schools) {
-  const pool = schools.filter(s => s.entryYear === 7 && s.gcse.a8 != null);
-  // Crude "results given intake": residual of Attainment 8 after allowing for % FSM.
-  const pts = pool.filter(s => s.fsm != null).map(s => [s.fsm, s.gcse.a8]);
+// Crude intake adjustment: residual of a measure after allowing (linearly) for % free school meals.
+// Both results and absence are strongly tied to deprivation, so we judge schools against similar intakes.
+function intakeAdjuster(schools, get) {
+  const pts = schools.filter(s => s.fsm != null && get(s) != null).map(s => [s.fsm, get(s)]);
   const mx = mean(pts.map(p => p[0])), my = mean(pts.map(p => p[1]));
   const slope = pts.reduce((t, [x, y]) => t + (x - mx) * (y - my), 0) / pts.reduce((t, [x]) => t + (x - mx) ** 2, 0);
-  const resid = s => (s.fsm == null || s.gcse.a8 == null) ? null : s.gcse.a8 - (my + slope * (s.fsm - mx));
+  return s => (s.fsm == null || get(s) == null) ? null : get(s) - (my + slope * (s.fsm - mx));
+}
+
+export function buildContext(schools) {
+  const pool = schools.filter(s => s.entryYear === 7 && s.gcse.a8 != null);
   const all7 = schools.filter(s => s.entryYear === 7);
+  const resid = intakeAdjuster(pool, s => s.gcse.a8);
+  const paResid = intakeAdjuster(all7, s => s.persistentAbsence);
   return {
-    slope, intercept: my - slope * mx, resid,
+    resid, paResid,
     pA8: percentileFn(pool.map(s => s.gcse.a8)), pG5: percentileFn(pool.map(s => s.gcse.g5)), pG7: percentileFn(pool.map(s => s.gcse.g7)),
     pResid: percentileFn(pool.map(resid)),
     pPA: percentileFn(all7.map(s => s.persistentAbsence)),
+    pPAResid: percentileFn(all7.map(paResid)),
     pCohort: percentileFn(all7.map(s => yearGroupSize(s))),
     pPTR: percentileFn(all7.map(s => s.ptr)),
     medians: {
@@ -186,7 +193,10 @@ export function schoolFactors(s, ctx, home) {
   f.stretch = ctx.pG7(s.gcse.g7);
   f.valueAdded = ctx.pResid(ctx.resid(s));
   const beh = areaOf(s, 'Attendance & behaviour', 'Behaviour & attitudes');
-  const paInv = s.persistentAbsence == null ? null : 1 - ctx.pPA(s.persistentAbsence);
+  // Absence relative to schools with a similar intake (falls back to raw absence if FSM is unknown).
+  const paR = ctx.paResid(s);
+  const paInv = s.persistentAbsence == null ? null : 1 - (paR != null ? ctx.pPAResid(paR) : ctx.pPA(s.persistentAbsence));
+  f.paResid = paR;
   const behV = beh ? OFSTED_VALUE[beh.grade] : null;
   const ov = OFSTED_VALUE[s.ofsted] ?? null;
   f.calm = behV != null && paInv != null ? 0.55 * behV + 0.45 * paInv
@@ -235,7 +245,27 @@ function weightsFor(input, needs) {
   return w;
 }
 
-const BAND = [[0.75, 'Strong match'], [0.63, 'Good match'], [0.5, 'Mixed match'], [-1, 'Weaker match']];
+const BAND = [[0.75, 'strong'], [0.63, 'good'], [0.5, 'mixed'], [-1, 'weaker']];
+const BAND_LABEL = {
+  child: { strong: 'Strong match', good: 'Good match', mixed: 'Mixed match', weaker: 'Weaker match', none: 'Not enough information' },
+  // With no child details there is nothing to "match": describe it as a comparison on the data instead.
+  data: { strong: 'Strong on the data', good: 'Good on the data', mixed: 'Mixed on the data', weaker: 'Weaker on the data', none: 'Not enough information' },
+};
+const DRIVER_LABEL = {
+  results: 'Headline GCSE results', stretch: 'Top grades (7+ in English and maths)', valueAdded: 'Results allowing for intake',
+  calm: 'Behaviour and attendance (allowing for intake)', pastoral: 'Pastoral care and wellbeing', support: 'Catch-up support and inclusion',
+  small: 'Smaller year group', large: 'Larger year group', proximity: 'Distance from home', sixth: 'Has a sixth form',
+  overall: 'Overall Ofsted outcome', faith: 'Your faith-school preference', gender: 'Your mixed/single-sex preference',
+  eligible: 'Eligibility (single-sex school)', visitFit: 'Your view of fit after visiting', visitChild: 'Your child’s view',
+  visitFeel: 'Overall feel on your visit', friends: 'Friends likely to go',
+};
+function drivers(parts, f) {
+  const tw = parts.reduce((t, p) => t + p.weight, 0);
+  return parts.map(p => ({
+    key: p.key, label: DRIVER_LABEL[p.key] || p.key, share: tw ? p.weight / tw : 0, value: p.value,
+    weak: p.key === 'pastoral' && f.pastoralEvidence === 'weak',
+  })).sort((a, b) => b.share - a.share);
+}
 
 export function evaluate(input, schools, ctx = buildContext(schools)) {
   const profile = scoreProfile(input.child?.answers);
@@ -243,6 +273,8 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
   const transition = transitionOutlook(input.child?.transition, profile);
   const child = { profile, attainment, transition, transitionRaw: input.child?.transition || {}, motivators: input.child?.motivators || [], interests: input.child?.interests || [] };
   const needs = deriveNeeds(child);
+  const hasChild = Object.values(profile).some(p => p.band) || !!attainment.band || !!transition.level || child.motivators.length > 0 || child.interests.length > 0;
+  const mode = hasChild ? 'child' : 'data';
   const w = weightsFor(input, needs);
   const fam = input.family || {};
   const outcode = normaliseOutcode(fam.outcode);
@@ -292,7 +324,8 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
     const coverage = intended ? clamp(covered / intended) : 1;
     const score = raw == null ? null : 0.5 + (raw - 0.5) * (0.4 + 0.6 * coverage);
     const evidenceWeight = tw;
-    return { school: s, factors: f, parts, coverage: round(coverage, 2), score: round(score, 3), band: score == null ? 'Not enough information' : BAND.find(([t]) => score >= t)[1], evidenceWeight };
+    const bandKey = score == null ? 'none' : BAND.find(([t]) => score >= t)[1];
+    return { school: s, factors: f, parts, drivers: drivers(parts, f), coverage: round(coverage, 2), score: round(score, 3), bandKey, band: BAND_LABEL[mode][bandKey], evidenceWeight };
   };
 
   const shortlist = (input.shortlist || []).map(u => schools.find(s => s.urn === u)).filter(Boolean);
@@ -314,6 +347,7 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
     .map(e => ({ ...e, ...explain(e, { needs, input, ctx, child, home }) }));
 
   return {
+    mode, prioritiesSet: input.family?.prioritiesSet ?? true,
     child: { ...child, needs, name: input.child?.name || '' },
     family: { ...fam, outcode, located: !!home, priorities: { ...DEFAULT_PRIORITIES, ...(fam.priorities || {}) } },
     weights: w, schools: ranked, suggestions, ctx: { medians: ctx.medians },
@@ -348,11 +382,12 @@ function explain(e, { needs, input, ctx, child }) {
 
   // Climate and behaviour
   if (f.areas.beh) facts.push(`Ofsted ${f.areas.beh.name.toLowerCase()}: ${f.areas.beh.grade}${s.ofstedDate ? ` (${s.ofstedDate})` : ''}.`);
-  if (s.persistentAbsence != null) facts.push(`Persistent absence ${pct(s.persistentAbsence)} (area median ${pct(M.pa)}).`);
+  const paVs = f.paResid == null ? '' : Math.abs(f.paResid) < 3 ? '; about typical for its intake' : f.paResid < 0 ? `; about ${round(-f.paResid)} points lower than schools with similar intakes` : `; about ${round(f.paResid)} points higher than schools with similar intakes`;
+  if (s.persistentAbsence != null) facts.push(`Persistent absence ${pct(s.persistentAbsence)} (area median ${pct(M.pa)}${paVs}).`);
   const calmW = e.parts.find(p => p.key === 'calm')?.weight || 0;
   if (f.calm != null && calmW >= 3) {
-    if (f.calm >= 0.68) { const bits = [f.areas.beh && `Ofsted rated ${f.areas.beh.name.toLowerCase()} as ${f.areas.beh.grade.toLowerCase()}`, s.persistentAbsence != null && s.persistentAbsence < M.pa && `persistent absence (${pct(s.persistentAbsence)}) is below the area median (${pct(M.pa)})`].filter(Boolean); suits.push(`Signs of a settled climate${bits.length ? ': ' + bits.join(', and ') : ''}.`); }
-    else if (f.calm <= 0.4) weigh.push(`Climate indicators are weaker${f.areas.beh && OFSTED_VALUE[f.areas.beh.grade] < 0.5 ? `: Ofsted judged ${f.areas.beh.name.toLowerCase()} as “${f.areas.beh.grade}”` : ''}${s.persistentAbsence != null && s.persistentAbsence > M.pa ? `${f.areas.beh && OFSTED_VALUE[f.areas.beh.grade] < 0.5 ? ', and' : ':'} persistent absence is ${pct(s.persistentAbsence)} vs ${pct(M.pa)} median` : ''}. Watch lessons and corridors closely on your visit.`);
+    if (f.calm >= 0.68) { const bits = [f.areas.beh && `Ofsted rated ${f.areas.beh.name.toLowerCase()} as ${f.areas.beh.grade.toLowerCase()}`, f.paResid != null && f.paResid <= -3 && `persistent absence (${pct(s.persistentAbsence)}) is lower than at schools with similar intakes`].filter(Boolean); suits.push(`Signs of a settled climate${bits.length ? ': ' + bits.join(', and ') : ''}.`); }
+    else if (f.calm <= 0.4) { const bits = [f.areas.beh && OFSTED_VALUE[f.areas.beh.grade] < 0.5 && `Ofsted judged ${f.areas.beh.name.toLowerCase()} as “${f.areas.beh.grade}”`, f.paResid != null && f.paResid >= 3 && `persistent absence (${pct(s.persistentAbsence)}) is higher than at schools with similar intakes`].filter(Boolean); weigh.push(`Climate indicators are weaker${bits.length ? ': ' + bits.join(', and ') : ''}. Watch lessons and corridors closely on your visit.`); }
   }
   if (f.areas.beh && OFSTED_VALUE[f.areas.beh.grade] < 0.5) questions.push(`Ofsted rated ${f.areas.beh.name.toLowerCase()} as “${f.areas.beh.grade}”. What has changed since, and what does it look like day to day?`);
 

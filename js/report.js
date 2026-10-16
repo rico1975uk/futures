@@ -63,12 +63,17 @@ export function renderReport(r, { dataMeta = {}, preparedDate = new Date() } = {
 <p class="muted">Prepared ${dated}${r.family.outcode ? ` · Home area ${esc(r.family.outcode)}` : ''} · ${r.schools.length} school${r.schools.length === 1 ? '' : 's'} compared</p>`;
 
   // Summary
+  const dataOnly = r.mode === 'data';
+  if (dataOnly && r.schools.length) h += `<div class="notice warn"><p><strong>Compared on published data only.</strong> You haven’t told us about your child yet, so these ratings are not a personal match. They compare the schools on results, behaviour and attendance, pastoral evidence${r.family.located ? ', distance' : ''} and sixth form${r.prioritiesSet ? ', weighted by your priorities' : ', using standard weights because you haven’t adjusted the priorities in Step 5'}. Fill in Steps 2–4 for a report about your child.</p></div>`;
   h += `<section class="r-summary"><h2>In short</h2>`;
   if (!r.schools.length) h += `<p>You haven’t shortlisted any schools yet. Pick some in the school selector to get school-by-school guidance.</p>`;
   else {
-    h += `<p>${top.length ? `On the evidence available, <strong>${esc(top[0].school.name)}</strong>${top[1] ? ` and <strong>${esc(top[1].school.name)}</strong> look like the closest fits` : ' looks like the closest fit'} for ${name} and your family’s priorities.` : ''}</p>`;
+    // Only pair the runner-up with the leader when it is genuinely close.
+    const close = top[1] && (top[1].bandKey === top[0].bandKey || top[0].score - top[1].score < 0.05);
+    if (dataOnly) h += `<p>${top.length ? `On the published data, <strong>${esc(top[0].school.name)}</strong> ${close ? `and <strong>${esc(top[1].school.name)}</strong> come out strongest` : r.schools.length > 1 ? 'comes out ahead' : `is rated “${esc(top[0].band.toLowerCase())}”`}. That says nothing yet about which would suit your child.` : ''}</p>`;
+    else h += `<p>${top.length ? `On the evidence available, <strong>${esc(top[0].school.name)}</strong>${close ? ` and <strong>${esc(top[1].school.name)}</strong> look like the closest fits` : ' looks like the closest fit'} for ${name} and your family’s priorities.` : ''}</p>`;
     if (r.child.needs.length) h += `<p>What seems to matter most for ${name}: ${r.child.needs.slice(0, 3).map(n => `<strong>${esc(n.title.toLowerCase())}</strong>`).join('; ')}.</p>`;
-    h += `<p class="fine">This is a decision aid, not a ranking of school quality. Match ratings combine published data with what you told us, and your visits should count for more than any number here.</p>`;
+    h += `<p class="fine">This is a decision aid, not a ranking of school quality. ${dataOnly ? "Ratings here use published data only" : "Match ratings combine published data with what you told us"}, and your visits should count for more than any number here.</p>`;
   }
   h += `</section>`;
 
@@ -115,21 +120,21 @@ export function renderReport(r, { dataMeta = {}, preparedDate = new Date() } = {
 
   // Comparison table
   if (r.schools.length) {
-    h += `<h2>4. Your shortlist side by side</h2><div class="table-wrap"><table class="compare"><thead><tr><th>School</th><th>Match</th><th>Attainment 8</th><th>Eng &amp; maths 5+</th><th>Eng &amp; maths 7+</th><th>Year group</th><th>Persistent absence</th><th>Ofsted</th>${r.family.located ? '<th>Distance</th>' : ''}</tr></thead><tbody>`;
+    h += `<h2>4. Your shortlist side by side</h2><div class="table-wrap"><table class="compare"><thead><tr><th>School</th><th>${dataOnly ? "Rating" : "Match"}</th><th>Attainment 8</th><th>Eng &amp; maths 5+</th><th>Eng &amp; maths 7+</th><th>Year group</th><th>Persistent absence</th><th>Ofsted</th>${r.family.located ? '<th>Distance</th>' : ''}</tr></thead><tbody>`;
     for (const e of r.schools) {
       const s = e.school;
-      h += `<tr><td>${esc(s.name)}</td><td><span class="band ${bandClass(e.band)}">${esc(e.band)}</span></td><td>${s.gcse.a8 ?? '–'}</td><td>${pct(s.gcse.g5)}</td><td>${pct(s.gcse.g7)}</td><td>${e.factors.yearGroup ?? '–'}</td><td>${pct(s.persistentAbsence)}</td><td>${esc(s.ofsted || '–')}</td>${r.family.located ? `<td>${e.factors.distanceKm ?? '–'} km</td>` : ''}</tr>`;
+      h += `<tr><td>${esc(s.name)}</td><td><span class="band ${e.bandKey}">${esc(e.band)}</span></td><td>${s.gcse.a8 ?? '–'}</td><td>${pct(s.gcse.g5)}</td><td>${pct(s.gcse.g7)}</td><td>${e.factors.yearGroup ?? '–'}</td><td>${pct(s.persistentAbsence)}</td><td>${esc(s.ofsted || '–')}</td>${r.family.located ? `<td>${e.factors.distanceKm ?? '–'} km</td>` : ''}</tr>`;
     }
     h += `</tbody></table></div><p class="fine">Area medians across ${esc('Bristol-area')} state schools: Attainment 8 ${r.ctx.medians.a8}; grade 5+ ${pct(r.ctx.medians.g5)}; grade 7+ ${pct(r.ctx.medians.g7)}; persistent absence ${pct(r.ctx.medians.pa)}. Year group = Year 11 GCSE cohort as a proxy. Distance is straight-line from the centre of your postcode district.</p>`;
 
     // School by school
     h += `<h2>5. School by school</h2>`;
-    for (const e of r.schools) h += schoolBlock(e, name);
+    for (const e of r.schools) h += schoolBlock(e, name, dataOnly);
   }
 
   if (r.suggestions.length) {
     h += `<h2>6. Schools you might also look at</h2><p>Not on your shortlist, but within ${r.family.maxKm || 8} km and scoring at least as well on your child’s needs and your priorities as your lowest-rated shortlisted school.</p>`;
-    for (const e of r.suggestions) h += `<div class="suggest"><strong>${esc(e.school.name)}</strong> <span class="band ${bandClass(e.band)}">${esc(e.band)}</span> <span class="muted">· ${e.factors.distanceKm} km · ${esc(e.school.council || '')}</span>${list(e.suits.slice(0, 3), '')}</div>`;
+    for (const e of r.suggestions) h += `<div class="suggest"><strong>${esc(e.school.name)}</strong> <span class="band ${e.bandKey}">${esc(e.band)}</span> <span class="muted">· ${e.factors.distanceKm} km · ${esc(e.school.council || '')}</span>${list(e.suits.slice(0, 3), '')}</div>`;
   }
 
   // Questions
@@ -154,7 +159,14 @@ export function renderReport(r, { dataMeta = {}, preparedDate = new Date() } = {
 const WORRY = { friends: 'making new friends', losing: 'losing current friends', lost: 'getting lost', work: 'harder work', homework: 'homework', older: 'older students', teachers: 'strict teachers / getting into trouble', bullying: 'being picked on', journey: 'the journey' };
 const pct = x => x == null ? '–' : `${Math.round(x)}%`;
 const list = (a, empty) => a.length ? `<ul>${a.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : (empty ? `<p class="muted">${esc(empty)}</p>` : '');
-const bandClass = b => b.split(' ')[0].toLowerCase();
+const rateWord = v => v >= 0.7 ? 'Strong' : v >= 0.55 ? 'Above average' : v >= 0.45 ? 'Average' : v >= 0.3 ? 'Below average' : 'Weak';
+function driversTable(e) {
+  if (!e.drivers?.length) return '';
+  return `<details class="drivers"><summary>What drove this rating</summary>
+<p class="fine">Each row is one thing we weighed. “Weight” is its share of the overall rating, set by your child’s needs and your priorities. “This school” is how it compares with other Bristol-area schools.</p>
+<table><thead><tr><th>Factor</th><th>Weight</th><th>This school</th></tr></thead><tbody>${e.drivers.map(d => `<tr><td>${esc(d.label)}${d.weak ? ' <span class="muted">(limited evidence)</span>' : ''}</td><td><span class="share"><span style="width:${Math.round(d.share * 100)}%"></span></span> ${Math.round(d.share * 100)}%</td><td><span class="rate r${Math.round(d.value * 4)}">${rateWord(d.value)}</span></td></tr>`).join('')}</tbody></table>
+${e.coverage != null && e.coverage < 0.8 ? '<p class="fine">Some factors had no data for this school, so its rating has been pulled towards “mixed”.</p>' : ''}</details>`;
+}
 
 function motivationNote(m) {
   const needs = new Set(m.map(id => MOTIVATORS.find(x => x.id === id)?.need));
@@ -165,15 +177,16 @@ function motivationNote(m) {
   return 'Praise and rewards work in the short term. Over time it helps if the school also builds interest and pride in the work itself.';
 }
 
-function schoolBlock(e, name) {
+function schoolBlock(e, name, dataOnly) {
   const s = e.school;
   return `<div class="schoolprint">
-<div class="school-head"><h3>${esc(s.name)}</h3><span class="band ${bandClass(e.band)}">${esc(e.band)}</span></div>
+<div class="school-head"><h3>${esc(s.name)}</h3><span class="band ${e.bandKey}">${esc(e.band)}</span></div>
 <p class="muted">${esc([s.street, s.postcode].filter(Boolean).join(', '))} · ${esc(s.ageRange)} · ${esc(s.type || '')}${s.trust ? ` · ${esc(titleCase(s.trust))}` : ''}${s.website ? ` · <a href="${esc(s.website)}">website</a>` : ''}</p>
-<div class="twocol"><div><h4>Why it may suit ${name}</h4>${list(e.suits, 'Nothing stands out strongly either way on the published evidence.')}</div>
+<div class="twocol"><div><h4>${dataOnly ? 'Strengths on the data' : `Why it may suit ${name}`}</h4>${list(e.suits, 'Nothing stands out strongly either way on the published evidence.')}</div>
 <div><h4>Things to weigh</h4>${list(e.weigh, 'No particular concerns on the published evidence.')}</div></div>
 ${e.visit?.notes ? `<p><strong>Your notes:</strong> ${esc(e.visit.notes)}</p>` : ''}
 ${e.questions.length ? `<h4>Ask on your visit</h4>${list(e.questions, '')}` : ''}
+${driversTable(e)}
 <details><summary>Key facts</summary>${list(e.facts, '')}<p class="fine"><a href="${esc(s.profileUrl)}">Full data profile</a></p></details>
 </div>`;
 }
