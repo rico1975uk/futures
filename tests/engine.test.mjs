@@ -71,19 +71,51 @@ test('family priorities alone change the outcome', () => {
   assert.equal(order(results)[0], 'Bristol Free School', 'results-and-sixth-form family should top out on the highest-attaining school');
 });
 
-test('visit impressions are weighted heavily', () => {
+test('visit impressions never change the match score or appear as reasons', () => {
   const before = run('brightIndependent');
-  const mid = before.schools[3].school;
-  const after = run('brightIndependent', { visits: { [mid.urn]: { fit: 5, child: 5, feel: 5 } } });
-  assert.equal(order(after)[0], mid.name, 'a school parent and child both loved rises to the top of an unvisited shortlist');
-  const last = before.schools.at(-1);
-  const lastAfter = run('brightIndependent', { visits: { [last.school.urn]: { fit: 5, child: 5, feel: 5 } } }).schools.find(e => e.school.urn === last.school.urn);
-  assert.ok(lastAfter.score - last.score >= 0.1, 'even a weak-on-paper school gains substantially');
-  const top = before.schools[0].school;
-  const after2 = run('brightIndependent', { visits: { [top.urn]: { fit: 1, child: 1 } } });
-  assert.notEqual(order(after2)[0], top.name, 'disliked-on-visit school drops from top');
-  assert.ok(after2.schools.find(e => e.school.urn === top.urn).weigh.some(w => /only 1\/5/.test(w)));
+  const top = before.schools[0].school, last = before.schools.at(-1).school;
+  const visits = { [top.urn]: { fit: 1, child: 1 }, [last.urn]: { fit: 5, child: 5, obs: { lessons: 'yes', corridors: 'yes' } } };
+  const after = run('brightIndependent', { visits });
+  assert.deepEqual(after.schools.map(e => [e.school.name, e.score]), before.schools.map(e => [e.school.name, e.score]), 'scores and order unchanged');
+  const all = after.schools.flatMap(e => [...e.suits, ...e.weigh]).join(' ');
+  assert.doesNotMatch(all, /You rated|Trust that|Your child liked|wasn’t keen/, 'impressions are never offered as reasons');
+  assert.ok(!after.schools.some(e => e.drivers.some(d => /visit|view/i.test(d.label))), 'no visit factor in the breakdown');
 });
+
+test('disagreements between impressions and evidence are surfaced, siding with neither', () => {
+  const r0 = run('anxiousSensitive');
+  const strong = r0.schools[0], weak = r0.schools.at(-1); // Bristol Free School (strong), Fairfield (calm is weak on data)
+  const r = run('anxiousSensitive', { visits: {
+    [strong.school.urn]: { fit: 1, child: 4, obs: { lessons: 'no', corridors: 'no' } },
+    [weak.school.urn]: { fit: 5, obs: { lessons: 'yes', corridors: 'yes' } },
+  } });
+  const s = r.schools.find(e => e.school.urn === strong.school.urn).impressions.disagreements;
+  const w = r.schools.find(e => e.school.urn === weak.school.urn).impressions.disagreements;
+  assert.ok(s.some(d => d.kind === 'worse' && d.factor === 'calm'), 'saw worse behaviour than the data shows');
+  assert.ok(s.some(d => d.factor === 'overall' && /rated it only 1\/5/.test(d.text)), 'gut verdict below a strong evidence match');
+  assert.ok(s.some(d => d.kind === 'split'), 'parent and child disagree');
+  assert.ok(w.some(d => d.kind === 'better' && d.factor === 'calm' && /persistent absence 39%/.test(d.text)), 'saw better than data, citing the data');
+  assert.ok(w.some(d => d.factor === 'overall' && /What was it that appealed/.test(d.text)));
+  assert.equal(r.gutFavourite.urn, weak.school.urn);
+  const t = text(renderReport(r));
+  assert.match(t, /Where your impressions and the evidence disagree/);
+  assert.match(t, /Your own impressions favour Fairfield High School/);
+  assert.match(t, /not counted in the match/);
+  assert.match(t, /Before the detail/);
+  assert.match(t, /premortem/);
+  // No visits: no disagreement section.
+  assert.doesNotMatch(text(renderReport(r0)), /Where your impressions and the evidence disagree/);
+});
+
+test('premortem and challenge are in the talk-it-through prompt', () => {
+  const r = run('anxiousSensitive', { visits: { '147072': { fit: 5, obs: { lessons: 'yes' } } } });
+  const ctxPrompt = buildPrompts(r).find(p => p.id === 'context').text;
+  assert.match(ctxPrompt, /premortem/i);
+  assert.match(ctxPrompt, /Challenge my impressions/);
+  assert.match(ctxPrompt, /not counted in the tool's rating/);
+  assert.match(buildPrompts(r).find(p => p.id === 'visit').text, /Corridors and lunch felt manageable/);
+});
+
 
 test('single-sex eligibility and faith preferences', () => {
   const r = run('anxiousSensitive', { shortlist: ['151303', '138855'] }); // Montpelier (girls) for a boy

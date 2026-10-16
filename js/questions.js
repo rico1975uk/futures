@@ -136,6 +136,20 @@ export const TRANSITION = {
   },
 };
 
+// Visit observations: specific, checkable things tied to the factors the engine weighs. Specific
+// observations resist the halo effect better than "did you like it?" (Kahneman's mediating assessments).
+// They are compared with the published evidence; they never feed the match score.
+export const OBSERVATIONS = [
+  { id: 'lessons', factor: 'calm', need: 'calm', text: 'Lessons we saw were calm and purposeful' },
+  { id: 'corridors', factor: 'calm', need: 'calm', text: 'Corridors and lunch felt manageable at busy times' },
+  { id: 'known', factor: 'pastoral', need: 'pastoral', text: 'Staff talked about individual pupils, not just policies' },
+  { id: 'transition', factor: 'pastoral', need: 'pastoral', text: 'There was a clear plan for Year 7s’ first weeks (named contact, induction)' },
+  { id: 'stretch', factor: 'stretch', need: 'stretch', text: 'Work we saw looked genuinely challenging for able pupils' },
+  { id: 'support', factor: 'support', need: 'support', text: 'They were specific about how they help pupils who are behind' },
+  { id: 'pupils', factor: 'pupils', need: null, text: 'Pupils we met seemed happy and spoke well of the school' },
+];
+export const OBS_SCALE = [['yes', 'Yes', 1], ['partly', 'Partly', 0.5], ['no', 'No', 0], ['', 'Didn’t see', null]];
+
 // Short, honest summaries of the research the engine leans on. Shown in the report's “Why we ask” section.
 export const EVIDENCE = {
   personality: {
@@ -165,6 +179,10 @@ export const EVIDENCE = {
   transition: {
     short: 'In UK studies of the move to secondary school, the strongest predictors of a difficult transition were prior anxiety, being bullied, and low school connectedness. Making new friends, settling into routines and feeling that school “gets” you predicted a good one.',
     refs: ['Evangelou et al. (2008), DCSF Research Report RR019', 'Rice, Frederickson & Seymour (2011), British J. Educational Psychology 81(2)', 'Rice et al. (2021), School Mental Health 13'],
+  },
+  judgement: {
+    short: 'Impressions from a single visit are vulnerable to the halo effect: one striking feature colours everything. Judgements are more reliable when broken into specific, independent assessments with the overall verdict made last, and when people judge independently before comparing notes.',
+    refs: ['Kahneman (2011), Thinking, Fast and Slow', 'Kahneman, Sibony & Sunstein (2021), Noise', 'Dawes (1979), American Psychologist 34(7)'],
   },
   schoolEffects: {
     short: 'Headline results mostly reflect a school’s intake. Differences in how much a school adds for an individual child are real but smaller and less certain than league tables suggest, so fit and practicalities matter too.',

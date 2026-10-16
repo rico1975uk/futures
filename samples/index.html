@@ -81,6 +81,26 @@ fieldset.radios legend,.dimset legend{font-weight:650;margin-bottom:6px;padding:
 .btn.ghost{background:none;color:var(--navy);text-decoration:underline}
 .notice{border-left:4px solid var(--blue);background:#edf6f7;padding:10px 16px;border-radius:5px;margin:14px 0}
 .notice p{margin:4px 0}
+/* impressions vs evidence */
+.outside-view{border:1px solid var(--line);border-radius:10px;padding:4px 18px 6px;margin:16px 0}
+.outside-view h3{margin:12px 0 4px;font-size:16px}
+.outside-view li{margin-bottom:6px}
+.visit-box{background:#f7f5ef;border:1px solid #e6dfcc;border-radius:8px;padding:6px 14px 8px;margin:10px 0}
+.visit-box h4{margin:8px 0 4px}
+.visit-box ul{margin:4px 0}
+.disagree{padding-left:0;list-style:none}
+.disagree li{border-left:4px solid var(--mid);background:var(--mid-bg);padding:10px 14px;border-radius:5px;margin:10px 0}
+.disagree li.worse{border-left-color:var(--blue);background:#edf6f7}
+.disagree li.split{border-left-color:#8a7bb8;background:#f1eef8}
+.obs-table{width:100%;border-collapse:collapse;margin:6px 0 10px}
+.obs-table td{padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+.obs-table td:first-child{width:52%}
+.obs-opts{display:flex;gap:4px;flex-wrap:wrap}
+.obs-opts label{margin:0;font-weight:500;font-size:12px;border:1px solid var(--line);border-radius:6px;padding:4px 8px;cursor:pointer}
+.obs-opts label:has(input:checked){background:#d7eef0;border-color:var(--blue);font-weight:700}
+.obs-opts input{display:none}
+.tagline{font-size:11px;font-weight:700;color:var(--blue);margin-left:4px}
+.visit-step{font-size:12px;font-weight:750;text-transform:uppercase;letter-spacing:.07em;color:var(--blue);margin:14px 0 4px}
 /* prompts */
 .prompt-options{display:grid;gap:6px;margin:0 0 8px}
 .prompt-options legend{font-weight:650;margin-bottom:6px}
@@ -153,6 +173,8 @@ main.standalone{max-width:900px;margin:30px auto;padding:0 16px}
   .sc-stats{grid-template-columns:repeat(4,1fr);text-align:left}
   .scale label{font-size:11px}
   .prompt-head{flex-direction:column}
+  .obs-table td{display:block;width:100%!important;border:0;padding:2px 0}
+  .obs-table tr{display:block;border-bottom:1px solid var(--line);padding:6px 0}
 }
 @media print{
   body{background:#fff;color:#000;font:10.5pt/1.4 Georgia,serif}

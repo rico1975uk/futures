@@ -18,7 +18,7 @@ The site is plain static files (`index.html`, `css/`, `js/`), so it can be hoste
 |---|---|---|
 | School data | `js/data/schools.js` | 47 state secondaries from [FindGreatSchools' Bristol list](https://findgreatschools.co.uk/gcse-results/bristol) (DfE/Ofsted-derived): GCSE 2025-26, Ofsted (including new report-card areas), size, absence, faith, sixth form, council, location. Rebuild with `npm run build-data` (cached in `.cache/`; `--refresh` to re-download). Independent schools are excluded by design. |
 | Questions | `js/questions.js` | "Describe your child": 19 everyday statements across 7 dimensions (social energy, worry, self-organisation, curiosity, environmental sensitivity, need for structure, need for autonomy), plus motivation (self-determination theory), transition/wellbeing factors and parent-reported attainment. Evidence notes and references sit alongside. |
-| Engine | `js/engine.js` | Pure functions. Profile → needs (e.g. *strong pastoral care*, *stretch*, *calm environment*) → per-school factor weights → a match band with plain-English reasons, concerns and tailored visit questions. Missing data pulls a school toward "mixed" rather than flattering it. Visit ratings can carry as much weight as all the published data. |
+| Engine | `js/engine.js` | Pure functions. Profile → needs (e.g. *strong pastoral care*, *stretch*, *calm environment*) → per-school factor weights → a match band with plain-English reasons, concerns and tailored visit questions. Missing data pulls a school toward "mixed" rather than flattering it. **Visit impressions are deliberately not in the score**: counting them would hand the parent's own view back with the tool's authority. Instead the visit form asks for the child's view first, then specific observations, then the overall verdict last (Kahneman's mediating assessments), and the report shows where impressions and evidence disagree. Persistent absence and results are both judged against schools with similar intakes. |
 | Report | `js/report.js` | Printable HTML report. |
 | Own-AI prompts | `js/prompts.js` | After the report, parents get copy-and-paste prompts for Claude, Gemini or ChatGPT: *talk it through*, *could we get a place?* (admissions distances, which is our biggest data gap), one *research this school* prompt per shortlisted school tailored to the child's needs and interests, a head-to-head of the top two, and *plan our visits*. Privacy switches: postcode district (on), visit notes (on), wellbeing details (off), child's name (off). Research prompts only ever carry needs, interests and attainment level. |
 
@@ -31,6 +31,8 @@ The site is plain static files (`index.html`, `css/`, `js/`), so it can be hoste
 - Environmental sensitivity: Pluess (2015).
 - Transition to secondary: Evangelou et al. (2008, DCSF RR019); Rice et al. (2011, 2021).
 - Limits of league tables for choice: Leckie & Goldstein (2009); Burgess et al. (2015).
+- Structured judgement, halo effect, noise: Kahneman (2011); Kahneman, Sibony & Sunstein (2021); Dawes (1979).
+- Stability of child personality: Roberts & DelVecchio (2000); Soto et al. (2011); Soto & Tackett (2015).
 
 The child questions are adapted, not a validated psychometric instrument, and the tool says so to parents.
 

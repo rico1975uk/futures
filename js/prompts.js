@@ -1,6 +1,6 @@
 // Generates copy-and-paste prompts so parents can use their own AI assistant (Claude, Gemini, ChatGPT…)
 // to research what our data can't tell them. Pure functions: no DOM, so they're testable.
-import { DIMENSIONS, MOTIVATORS, INTERESTS } from './questions.js';
+import { DIMENSIONS, MOTIVATORS, INTERESTS, OBSERVATIONS } from './questions.js';
 
 const GROUND_RULES = `Ground rules for your answer:
 - Search the web where you can, and give me a link for every fact about a school.
@@ -76,12 +76,18 @@ export function buildPrompts(r, { includeArea = true, includeName = false, inclu
 
   // 1. Full context: the report as a starting point for a conversation.
   const shortlist = schools.map(e => {
-    const v = e.visit || {};
-    const visit = [v.fit && `my rating of fit ${v.fit}/5`, v.child && `${who}'s rating ${v.child}/5`, includeNotes && v.notes && `my notes: "${v.notes.trim()}"`].filter(Boolean).join('; ');
+    const im = e.impressions || { observed: [], disagreements: [] };
+    const OBS = { yes: 'yes', partly: 'partly', no: 'no' };
+    const visit = [
+      im.child && `${who}'s view ${im.child}/5${includeNotes && im.childNote ? ` ("${im.childNote.trim()}")` : ''}`,
+      ...im.observed.map(o => `${o.text.toLowerCase()}: ${OBS[o.answer]}`),
+      im.fit && `my overall verdict ${im.fit}/5`,
+      includeNotes && im.notes && `my notes: "${im.notes.trim()}"`,
+    ].filter(Boolean).join('; ');
     return `### ${schoolLabel(e.school)}: ${e.band}
 Why it may suit: ${e.suits.join(' ') || 'nothing stands out on the published data.'}
 To weigh: ${e.weigh.join(' ') || 'no particular concerns on the published data.'}
-Key facts: ${e.facts.join(' ')}${visit ? `\nOur visit: ${visit}.` : ''}`;
+Key facts: ${e.facts.join(' ')}${visit ? `\nOur visit impressions (not counted in the tool's rating): ${visit}.` : ''}${im.disagreements.length ? `\nWhere our impressions and the evidence disagree: ${im.disagreements.map(d => d.text).join(' ')}` : ''}`;
   }).join('\n\n');
   prompts.push({
     id: 'context', title: 'Talk it through', when: 'Start here. Gives your AI the whole picture so you can ask follow-up questions in your own words.',
@@ -99,9 +105,11 @@ ${shortlist}
 Please:
 1. In a few paragraphs, tell me what stands out to you, including anything the tool may have missed or overweighted.
 2. Name the real trade-offs between the leading options.
-3. Ask me up to five questions that would most help sharpen the decision.
+3. Where my visit impressions and the evidence disagree, help me work out which to believe. Challenge my impressions rather than simply confirming them: open evenings are staged, and one striking thing can colour everything else.
+4. Run a premortem: imagine it's Year 8 and our choice has turned out badly. For each of the leading schools, what are the most likely reasons?
+5. Ask me up to five questions that would most help sharpen the decision.
 
-Treat the tool's ratings as a starting point, not the truth. My own visit impressions should count for a lot. Don't label or diagnose my child.
+Treat the tool's ratings as a starting point, not the truth, and don't treat my impressions as the truth either. Don't label or diagnose my child.
 
 ${GROUND_RULES}`,
   });
@@ -180,10 +188,14 @@ ${child}
 Here are the questions I want answered at every school:
 ${r.generalQuestions.map(q => `- ${q}`).join('\n') || '- (none yet)'}
 
+And the specific things I want to observe at each school (yes / partly / no):
+${OBSERVATIONS.map(o => `- ${o.text}`).join('\n')}
+
 Please:
-1. Turn these into a one-page visit checklist I can print and use at each school: the most important questions first, plus things to look out for (lessons, corridors at changeover, lunch, how staff and pupils speak to each other).
+1. Turn these into a one-page visit checklist I can print and use at each school: the most important questions first, then the observations with space to tick, plus other things to look out for (lessons, corridors at changeover, lunch, how staff and pupils speak to each other). Put the overall "how did it feel?" question at the very end, so specific observations come before the gut verdict.
 2. Suggest 5 questions ${who} could ask pupils or teachers themselves, in their own words.
-3. Suggest a few gentle questions I can ask ${who} afterwards to find out how they really felt, without leading them.`,
+3. Suggest a few gentle questions I can ask ${who} afterwards to find out how they really felt, without leading them. Remind me to ask before I give my own opinion.
+4. Suggest how to avoid being swayed by the open-evening show: what to look at that a school can't easily stage.`,
   });
 
   // Final safety net: honour the privacy switches even where the district or name appears inside

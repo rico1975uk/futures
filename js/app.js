@@ -1,6 +1,6 @@
 // UI wiring: renders the questionnaire, persists answers locally, runs the engine and shows the report.
 import { SCHOOLS, OUTCODES, DATA_META } from './data/schools.js';
-import { DIMENSIONS, LIKERT, MOTIVATORS, INTERESTS, ATTAINMENT_LEVELS, SUBJECTS, TRANSITION, EVIDENCE } from './questions.js';
+import { DIMENSIONS, LIKERT, MOTIVATORS, INTERESTS, ATTAINMENT_LEVELS, SUBJECTS, TRANSITION, EVIDENCE, OBSERVATIONS, OBS_SCALE } from './questions.js';
 import { evaluate, buildContext, haversineKm, normaliseOutcode, yearGroupSize } from './engine.js';
 import { renderReport, esc } from './report.js';
 import { buildPrompts, allPromptsText } from './prompts.js';
@@ -123,13 +123,24 @@ function rating(urn, key, label) {
 function renderVisits() {
   const items = state.shortlist.map(u => SCHOOLS.find(s => s.urn === u)).filter(Boolean);
   if (!items.length) { $('#visit-inputs').innerHTML = '<p class="muted">Add schools to your shortlist in Step 1 first.</p>'; return; }
+  // Flag the observations that bear on this child's needs, so parents know where to look hardest.
+  const needs = new Set(evaluate(collect(), SCHOOLS, CTX).child.needs.map(n => n.id));
   $('#visit-inputs').innerHTML = items.map(s => {
     const v = state.visits[s.urn] || {};
+    const obs = v.obs || {};
     return `<section class="school"><h3>${esc(s.name)}</h3>
-    <div class="twocol">${rating(s.urn, 'fit', 'Your view: fit for your child')}${rating(s.urn, 'child', 'Your child’s view')}</div>
-    ${rating(s.urn, 'feel', 'Overall feel of the school')}
-    <div class="twocol"><div class="field"><label for="vn_${s.urn}">What stood out?</label><textarea id="vn_${s.urn}" data-urn="${s.urn}" maxlength="600" placeholder="Positives, concerns, uncertainties. Your words appear in your report.">${esc(v.notes || '')}</textarea></div>
+    <p class="visit-step">1 · Ask your child first</p>
+    <p class="hint">Before you say what you think, so you hear their view rather than your own.</p>
+    <div class="twocol">${rating(s.urn, 'child', 'Your child’s view')}
+    <div class="field"><label for="vc_${s.urn}">In their words: what did they like or not like?</label><textarea id="vc_${s.urn}" data-urn="${s.urn}" maxlength="300">${esc(v.childNote || '')}</textarea></div></div>
+    <p class="visit-step">2 · What you saw</p>
+    <p class="hint">Specific observations first. They are harder to sway than an overall impression.</p>
+    <table class="obs-table"><tbody>${OBSERVATIONS.map(o => `<tr><td>${esc(o.text)}${o.need && needs.has(o.need) ? '<span class="tagline">matters for your child</span>' : ''}</td>
+      <td><div class="obs-opts" role="radiogroup" aria-label="${esc(o.text)}">${OBS_SCALE.map(([val, label]) => `<label><input type="radio" name="ob_${s.urn}_${o.id}" value="${val}" ${(obs[o.id] || '') === val && (val || o.id in obs) ? 'checked' : ''}>${label}</label>`).join('')}</div></td></tr>`).join('')}</tbody></table>
+    <p class="visit-step">3 · Now, overall</p>
+    <div class="twocol">${rating(s.urn, 'fit', 'Your overall verdict: fit for your child')}
     <div class="field"><label for="vf_${s.urn}">Friends likely to go there?</label><select id="vf_${s.urn}" data-urn="${s.urn}"><option value="">Don’t know</option><option value="none" ${v.friends === 'none' ? 'selected' : ''}>None</option><option value="one" ${v.friends === 'one' ? 'selected' : ''}>One</option><option value="several" ${v.friends === 'several' ? 'selected' : ''}>Several</option></select></div></div>
+    <div class="field"><label for="vn_${s.urn}">Anything else that stood out?</label><textarea id="vn_${s.urn}" data-urn="${s.urn}" maxlength="600" placeholder="Positives, concerns, uncertainties. Your words appear in your report.">${esc(v.notes || '')}</textarea></div>
     </section>`;
   }).join('');
 }
@@ -207,12 +218,19 @@ function bind() {
   $('#interests').addEventListener('change', () => { state.interests = $$('#interests input:checked').map(x => x.value); save(); });
   $('#prioritylist').addEventListener('input', e => { const id = e.target.id.slice(2); $('#o_' + id).textContent = e.target.value; state.priorities[id] = +e.target.value; save(); });
   $('#visit-inputs').addEventListener('change', e => {
-    const t = e.target, m = t.name?.match(/^v_(\d+)_(\w+)$/);
+    const t = e.target, m = t.name?.match(/^v_(\d+)_(\w+)$/), o = t.name?.match(/^ob_(\d+)_(\w+)$/);
     if (m) (state.visits[m[1]] ||= {})[m[2]] = +t.value;
+    else if (o) { const obs = ((state.visits[o[1]] ||= {}).obs ||= {}); if (t.value) obs[o[2]] = t.value; else delete obs[o[2]]; }
     else if (t.id?.startsWith('vf_')) (state.visits[t.dataset.urn] ||= {}).friends = t.value;
     save();
   });
-  $('#visit-inputs').addEventListener('input', e => { if (e.target.id?.startsWith('vn_')) { (state.visits[e.target.dataset.urn] ||= {}).notes = e.target.value; save(); } });
+  $('#visit-inputs').addEventListener('input', e => {
+    const t = e.target;
+    if (t.id?.startsWith('vn_')) { (state.visits[t.dataset.urn] ||= {}).notes = t.value; save(); }
+    if (t.id?.startsWith('vc_')) { (state.visits[t.dataset.urn] ||= {}).childNote = t.value; save(); }
+  });
+  // Which observations matter depends on the child's answers, so refresh the visit form when they change.
+  ['#dims', '#transition-qs', '#attainment'].forEach(id => $(id).addEventListener('change', renderVisits));
   $$('[data-save]').forEach(el => {
     if (state.fields[el.id] != null) el.value = state.fields[el.id];
     el.addEventListener('input', () => { state.fields[el.id] = el.value; save(); });

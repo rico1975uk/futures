@@ -1,6 +1,6 @@
 // Matching engine: child profile + family priorities + school data -> structured, qualitative evaluation.
 // Pure functions only (no DOM) so it can be unit-tested in Node and reused by the AI layer.
-import { DIMENSIONS, ATTAINMENT_LEVELS, SUBJECTS, MOTIVATORS, INTERESTS } from './questions.js';
+import { DIMENSIONS, ATTAINMENT_LEVELS, SUBJECTS, MOTIVATORS, INTERESTS, OBSERVATIONS } from './questions.js';
 
 // ---------- helpers ----------
 const clamp = (x, lo = 0, hi = 1) => Math.max(lo, Math.min(hi, x));
@@ -265,8 +265,8 @@ const DRIVER_LABEL = {
   calm: 'Behaviour and attendance (allowing for intake)', pastoral: 'Pastoral care and wellbeing', support: 'Catch-up support and inclusion',
   proximity: 'Distance from home', sixth: 'Has a sixth form',
   overall: 'Overall Ofsted outcome', faith: 'Your faith-school preference', gender: 'Your mixed/single-sex preference',
-  eligible: 'Eligibility (single-sex school)', visitFit: 'Your view of fit after visiting', visitChild: 'Your child’s view',
-  visitFeel: 'Overall feel on your visit', friends: 'Friends likely to go',
+  eligible: 'Eligibility (single-sex school)',
+  friends: 'Friends likely to go',
 };
 function drivers(parts, f) {
   const tw = parts.reduce((t, p) => t + p.weight, 0);
@@ -289,7 +289,6 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
   const outcode = normaliseOutcode(fam.outcode);
   const home = outcode && input.outcodes?.[outcode] ? input.outcodes[outcode] : null;
 
-  const anyVisits = Object.values(input.visits || {}).some(v => v && (v.fit || v.child || v.feel));
   const evalSchool = s => {
     const f = schoolFactors(s, ctx, home);
     const parts = [];
@@ -312,13 +311,10 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
     if (s.gender === 'Girls' && sex === 'boy' || s.gender === 'Boys' && sex === 'girl') push('eligible', 50, 0);
     if (fam.gender === 'single') push('gender', 3, s.gender !== 'Mixed' ? 1 : 0);
     if (fam.gender === 'mixed') push('gender', 3, s.gender === 'Mixed' ? 1 : 0);
-    // The family's and child's own impressions from visits are first-hand evidence: together they can carry
-    // as much weight as all the published data combined, however many priorities the family has turned up.
+    // Visit impressions deliberately do NOT enter the score: the match is the tool's independent view of the
+    // evidence, and impressions are compared against it instead (see compareImpressions). Whether friends are
+    // going is a fact, not an impression, and is a well-evidenced protective factor for the move to Year 7.
     const v = input.visits?.[s.urn] || {};
-    const vw = w.intended;
-    if (v.fit) push('visitFit', vw * 0.45, (v.fit - 1) / 4);
-    if (v.child) push('visitChild', vw * 0.4, (v.child - 1) / 4);
-    if (v.feel) push('visitFeel', vw * 0.15, (v.feel - 1) / 4);
     if (v.friends && (transition.level === 'extra' || transition.level === 'some' || needs.some(x => x.id === 'belonging')))
       push('friends', 2, v.friends === 'several' ? 1 : v.friends === 'one' ? 0.75 : 0.3);
 
@@ -326,10 +322,8 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
     const raw = tw ? parts.reduce((t, p) => t + p.weight * p.value, 0) / tw : null;
     // Missing data shouldn't flatter a school: pull the score toward neutral in proportion to what we couldn't assess.
     const dataKeys = ['results', 'stretch', 'valueAdded', 'calm', 'pastoral', 'support', 'size', 'proximity', 'sixth', 'overall'];
-    // Once a family has started visiting, an unvisited school is missing evidence too.
-    const visitKeys = anyVisits ? ['visitFit', 'visitChild', 'visitFeel'] : [];
-    const covered = parts.filter(p => dataKeys.includes(p.key) || visitKeys.includes(p.key)).reduce((t, p) => t + p.weight, 0);
-    const intended = dataKeys.reduce((t, k) => t + (k === 'proximity' && !home ? 0 : (w[k] || 0)), 0) + (anyVisits ? w.intended : 0);
+    const covered = parts.filter(p => dataKeys.includes(p.key)).reduce((t, p) => t + p.weight, 0);
+    const intended = dataKeys.reduce((t, k) => t + (k === 'proximity' && !home ? 0 : (w[k] || 0)), 0);
     const coverage = intended ? clamp(covered / intended) : 1;
     const score = raw == null ? null : 0.5 + (raw - 0.5) * (0.4 + 0.6 * coverage);
     const evidenceWeight = tw;
@@ -340,7 +334,11 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
   const shortlist = (input.shortlist || []).map(u => schools.find(s => s.urn === u)).filter(Boolean);
   const evaluated = shortlist.map(evalSchool);
   for (const e of evaluated) Object.assign(e, explain(e, { needs, input, ctx, child, home }));
+  for (const e of evaluated) e.impressions = compareImpressions(e, needs, mode);
   const ranked = [...evaluated].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+  // Which school the family's own overall verdict favours, so the report can say when it differs from the evidence.
+  const byGut = evaluated.filter(e => e.impressions.fit).sort((a, b) => b.impressions.fit - a.impressions.fit || (b.score ?? 0) - (a.score ?? 0));
+  const gutFavourite = byGut.length && byGut[0].impressions.fit >= 4 && (byGut.length < 2 || byGut[0].impressions.fit > byGut[1].impressions.fit) ? byGut[0].school : null;
 
   // Schools not on the shortlist that look worth a visit.
   const maxKm = fam.maxKm || 8;
@@ -356,7 +354,7 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
     .map(e => ({ ...e, ...explain(e, { needs, input, ctx, child, home }) }));
 
   return {
-    mode, prioritiesSet: input.family?.prioritiesSet ?? true,
+    mode, prioritiesSet: input.family?.prioritiesSet ?? true, gutFavourite,
     child: { ...child, needs, name: input.child?.name || '' },
     family: { ...fam, outcode, located: !!home, priorities: { ...DEFAULT_PRIORITIES, ...(fam.priorities || {}) } },
     weights: w, schools: ranked, suggestions, ctx: { medians: ctx.medians },
@@ -386,7 +384,7 @@ function explain(e, { needs, input, ctx, child }) {
       questions.push('How do you stretch pupils who are already ahead? Is there setting in maths and science from Year 7, and what enrichment is there for the most able?');
     }
   } else {
-    weigh.push('No published GCSE results yet (a newer school), so judge it on visits, leadership and Ofsted.');
+    weigh.push('No published GCSE results yet (a newer school), so judge it on Ofsted, leadership and the specific things you observe on a visit.');
   }
 
   // Climate and behaviour
@@ -406,7 +404,7 @@ function explain(e, { needs, input, ctx, child }) {
   if (pastW >= 4) {
     if (f.pastoralEvidence === 'ofsted' && f.pastoral >= 0.7) suits.push(`Ofsted rated ${f.areas.pd?.name.toLowerCase() || 'personal development'} as ${f.areas.pd?.grade.toLowerCase()}${f.areas.inc ? ` and inclusion as ${f.areas.inc.grade.toLowerCase()}` : ''}, which is relevant for a child who needs strong pastoral care.`);
     else if (f.pastoralEvidence === 'ofsted' && f.pastoral <= 0.45) weigh.push(`Ofsted’s view of personal development / wellbeing is weaker here (“${f.areas.pd?.grade}”). Probe pastoral support carefully.`);
-    else if (f.pastoralEvidence === 'weak') weigh.push('There is no recent published judgement on pastoral care or wellbeing, so your visit is the main evidence.');
+    else if (f.pastoralEvidence === 'weak') weigh.push('There is no recent published judgement on pastoral care or wellbeing, so check it specifically on your visit (see the observation checklist in Step 6).');
   }
   if (s.ptr != null) facts.push(`Pupil:teacher ratio ${s.ptr}:1.`);
 
@@ -446,7 +444,7 @@ function explain(e, { needs, input, ctx, child }) {
   if (s.ofsted === 'Inadequate' || s.ofsted === 'Urgent improvement') weigh.push(`Latest Ofsted outcome is “${s.ofsted}”. Ask what has changed since the inspection and what the improvement plan is.`);
   if (s.gender && s.gender !== 'Mixed') facts.push(`${s.gender}’ school.`);
   if (s.gender === 'Girls' && input.child?.sex === 'boy' || s.gender === 'Boys' && input.child?.sex === 'girl') weigh.unshift(`This is a ${s.gender.toLowerCase()}’ school, so your child would not be eligible.`);
-  if (e.coverage != null && e.coverage < 0.6) weigh.push('There is limited published data for the things that matter most for your child, so this rating is less certain. Your visit counts for more.');
+  if (e.coverage != null && e.coverage < 0.6) weigh.push('There is limited published data for the things that matter most for your child, so this rating is less certain. Use your visit to check the gaps.');
   if (s.religion) facts.push(`${s.religion} school. Check whether faith criteria apply in admissions.`);
   facts.push(s.sixthForm === true ? 'Has a sixth form.' : s.sixthForm === false ? 'No sixth form (11–16).' : (s.sixthNote || 'Sixth form: check with the school.'));
   if (fam.priorities?.sixth >= 3 && s.sixthForm === false) weigh.push('No sixth form, so they would move again at 16.');
@@ -456,18 +454,67 @@ function explain(e, { needs, input, ctx, child }) {
   if (fam.faith === 'avoid' && s.religion) weigh.push(`A ${s.religion} school, which you said you would rather avoid.`);
   if (fam.gender === 'single' && s.gender === 'Mixed') weigh.push('Mixed school; you said you would prefer single-sex.');
 
-  // Visits
+  // Visits: impressions are never offered as reasons a school suits (that would hand the family's own view
+  // back to them with the tool's authority). Only the factual friends question is used here.
   const v = input.visits?.[s.urn] || {};
-  if (v.fit >= 4) suits.push(`You rated its fit for your child ${v.fit}/5 after visiting.`);
-  if (v.fit && v.fit <= 2) weigh.push(`You rated its fit for your child only ${v.fit}/5 after visiting. Trust that.`);
-  if (v.child >= 4) suits.push(`Your child liked it (${v.child}/5).`);
-  if (v.child && v.child <= 2) weigh.push(`Your child wasn’t keen (${v.child}/5). Worth talking through why.`);
   if (v.friends === 'several' && e.parts.some(p => p.key === 'friends')) suits.push('Several friends are likely to go too, which is protective for the move to Year 7.');
   if (v.friends === 'none' && e.parts.some(p => p.key === 'friends')) weigh.push('No friends are likely to go. Ask how they help pupils who arrive alone make friends.');
-
-  if (!v.fit && !v.child && !v.feel) questions.push('Not visited or rated yet: your own impressions will matter more than anything in this report.');
+  if (!hasImpressions(v)) questions.push('Not visited yet: use the observation checklist in Step 6 when you do, and ask your child for their view before you share yours.');
 
   return { suits, weigh, facts, questions, visit: v };
+}
+
+// ---------- 6. impressions vs evidence ----------
+const hasImpressions = v => !!(v && (v.fit || v.child || Object.values(v.obs || {}).some(Boolean)));
+const FACTOR_NAME = { calm: 'behaviour and calm', pastoral: 'pastoral care', stretch: 'stretch for able pupils', support: 'support for pupils who are behind' };
+
+function evidenceDescription(key, e) {
+  const s = e.school, f = e.factors;
+  if (key === 'calm') return [f.areas.beh && `Ofsted: ${f.areas.beh.name.toLowerCase()} “${f.areas.beh.grade}”`, s.persistentAbsence != null && `persistent absence ${Math.round(s.persistentAbsence)}%${f.paResid != null ? (f.paResid >= 3 ? ', high for its intake' : f.paResid <= -3 ? ', low for its intake' : ', typical for its intake') : ''}`].filter(Boolean).join('; ');
+  if (key === 'pastoral') return f.areas.pd ? `Ofsted: ${f.areas.pd.name.toLowerCase()} “${f.areas.pd.grade}”${f.areas.inc ? `, inclusion “${f.areas.inc.grade}”` : ''}` : 'limited published evidence';
+  if (key === 'stretch') return s.gcse.g7 != null ? `${Math.round(s.gcse.g7)}% got grade 7+ in English and maths` : 'no published results';
+  if (key === 'support') return f.areas.inc ? `Ofsted inclusion “${f.areas.inc.grade}”` : 'limited published evidence';
+  return '';
+}
+
+// Compare what the family saw with what the evidence says. Disagreements are framed as questions to resolve,
+// siding with neither: a visit is a staged snapshot, but data averages over pupils who aren't your child.
+export function compareImpressions(e, needs, mode) {
+  const v = e.visit || {};
+  const out = { fit: v.fit || null, child: v.child || null, notes: v.notes || '', childNote: v.childNote || '', observed: [], disagreements: [] };
+  if (!hasImpressions(v)) return out;
+  const scale = { yes: 1, partly: 0.5, no: 0 };
+  const byFactor = {};
+  for (const o of OBSERVATIONS) {
+    const val = v.obs?.[o.id];
+    if (!val) continue;
+    out.observed.push({ text: o.text, answer: val, matters: !!(o.need && needs.some(n => n.id === o.need)) });
+    (byFactor[o.factor] ||= []).push(scale[val]);
+  }
+  const share = key => e.drivers.find(d => d.key === key)?.share || 0;
+  for (const [key, vals] of Object.entries(byFactor)) {
+    if (!FACTOR_NAME[key]) continue;
+    const seen = vals.reduce((t, x) => t + x, 0) / vals.length;
+    const data = e.factors[key];
+    if (data == null || (key === 'pastoral' && e.factors.pastoralEvidence === 'weak')) continue;
+    const matters = share(key) >= 0.08 || needs.some(n => n.id === key);
+    if (!matters) continue;
+    const desc = evidenceDescription(key, e);
+    if (seen >= 0.75 && data <= 0.4) out.disagreements.push({ kind: 'better', factor: key,
+      text: `On ${FACTOR_NAME[key]}, what you saw was more positive than the published evidence (${desc}). A visit is a prepared snapshot; the data covers every pupil across a whole year. Worth testing on an ordinary school day: ask what a normal Tuesday looks like, and what they are doing about it.` });
+    if (seen <= 0.25 && data >= 0.65) out.disagreements.push({ kind: 'worse', factor: key,
+      text: `On ${FACTOR_NAME[key]}, what you saw was less positive than the published evidence (${desc}). The data averages over every pupil; your visit may have picked up something it misses, or caught a bad moment. Worth pinning down exactly what concerned you, and asking about it directly.` });
+  }
+  const gut = v.fit;
+  if (gut && mode === 'child') {
+    if (gut >= 4 && (e.bandKey === 'mixed' || e.bandKey === 'weaker')) out.disagreements.push({ kind: 'better', factor: 'overall',
+      text: `You rated it ${gut}/5 for your child, but on the evidence it’s a ${e.band.toLowerCase()} for their needs. What was it that appealed? Check whether it will still matter on an ordinary day in Year 8, not just on an open evening.` });
+    if (gut <= 2 && (e.bandKey === 'strong' || e.bandKey === 'good')) out.disagreements.push({ kind: 'worse', factor: 'overall',
+      text: `On the evidence it’s a ${e.band.toLowerCase()} for your child, but you rated it only ${gut}/5. Try to name why. If it’s something specific to your child, that matters; if it was the event itself, a second look on a normal day may help.` });
+  }
+  if (v.fit && v.child && Math.abs(v.fit - v.child) >= 2) out.disagreements.push({ kind: 'split', factor: 'family',
+    text: `You and your child see this one differently (you ${v.fit}/5, your child ${v.child}/5). Worth a conversation about what each of you noticed.` });
+  return out;
 }
 
 function generalQuestions(child, needs, fam) {

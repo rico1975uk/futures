@@ -73,9 +73,17 @@ export function renderReport(r, { dataMeta = {}, preparedDate = new Date() } = {
     if (dataOnly) h += `<p>${top.length ? `On the published data, <strong>${esc(top[0].school.name)}</strong> ${close ? `and <strong>${esc(top[1].school.name)}</strong> come out strongest` : r.schools.length > 1 ? 'comes out ahead' : `is rated “${esc(top[0].band.toLowerCase())}”`}. That says nothing yet about which would suit your child.` : ''}</p>`;
     else h += `<p>${top.length ? `On the evidence available, <strong>${esc(top[0].school.name)}</strong>${close ? ` and <strong>${esc(top[1].school.name)}</strong> look like the closest fits` : ' looks like the closest fit'} for ${name} and your family’s priorities.` : ''}</p>`;
     if (r.child.needs.length) h += `<p>What seems to matter most for ${name}: ${r.child.needs.slice(0, 3).map(n => `<strong>${esc(n.title.toLowerCase())}</strong>`).join('; ')}.</p>`;
-    h += `<p class="fine">This is a decision aid, not a ranking of school quality. ${dataOnly ? "Ratings here use published data only" : "Match ratings combine published data with what you told us"}, and your visits should count for more than any number here.</p>`;
+    if (r.gutFavourite && r.gutFavourite.urn !== top[0].school.urn) h += `<p>Your own impressions favour <strong>${esc(r.gutFavourite.name)}</strong>. That’s worth taking seriously, and worth testing: see <a href="#r-impressions">where your impressions and the evidence disagree</a>.</p>`;
+    h += `<p class="fine">This is a decision aid, not a ranking of school quality. ${dataOnly ? 'Ratings here use published data only.' : 'Match ratings are the tool’s independent view: published data seen through your child’s needs and your priorities. Your visit impressions are shown alongside, not counted in, so the two can be compared.'}</p>`;
   }
   h += `</section>`;
+
+  // The outside view first: base rates before the detail (Kahneman), and some perspective.
+  if (r.schools.length) h += `<div class="outside-view"><h3>Before the detail</h3><ul>
+<li><strong>Most children settle.</strong> Even children who are anxious in July are usually settled by October half-term. The move is a bigger deal in prospect than in practice for most families.</li>
+<li><strong>Differences between schools are smaller than they look.</strong> Headline results mostly reflect who a school admits, and one year’s figures often drift back towards average the next. Your child’s own effort, friendships and support at home matter more to how they do.</li>
+<li><strong>No choice is irreversible.</strong> Children who are unhappy can and do move, and sixth form is another fresh start.</li>
+<li>As Daniel Kahneman put it, “Nothing in life is as important as you think it is while you are thinking about it.”</li></ul></div>`;
 
 
   // Child profile
@@ -127,30 +135,46 @@ export function renderReport(r, { dataMeta = {}, preparedDate = new Date() } = {
     }
     h += `</tbody></table></div><p class="fine">Area medians across ${esc('Bristol-area')} state schools: Attainment 8 ${r.ctx.medians.a8}; grade 5+ ${pct(r.ctx.medians.g5)}; grade 7+ ${pct(r.ctx.medians.g7)}; persistent absence ${pct(r.ctx.medians.pa)}. Year group = Year 11 GCSE cohort as a proxy. Distance is straight-line from the centre of your postcode district.</p>`;
 
+    // Impressions vs evidence
+    const visited = r.schools.filter(e => e.impressions?.fit || e.impressions?.child || e.impressions?.observed.length);
+    if (visited.length) {
+      const dis = visited.flatMap(e => e.impressions.disagreements.map(d => ({ ...d, school: e.school.name })));
+      h += `<h2 id="r-impressions">5. Where your impressions and the evidence disagree</h2>
+<p>Your visits and the published data are two different kinds of evidence. The data covers every pupil over a whole year but knows nothing about your child; a visit is about your child but is one prepared afternoon. Where they agree, you can be more confident. Where they don’t, neither automatically wins, and that’s where the useful questions are.</p>`;
+      h += dis.length
+        ? `<ul class="disagree">${dis.map(d => `<li class="${d.kind}"><strong>${esc(d.school)}.</strong> ${esc(d.text)}</li>`).join('')}</ul>`
+        : `<p><strong>No major disagreements.</strong> What you recorded broadly lines up with the published evidence for ${visited.map(e => esc(e.school.name)).join(', ')}.</p>`;
+      const unvisited = r.schools.filter(e => !visited.includes(e));
+      if (unvisited.length) h += `<p class="fine">Not yet visited: ${unvisited.map(e => esc(e.school.name)).join(', ')}.</p>`;
+    }
+
     // School by school
-    h += `<h2>5. School by school</h2>`;
+    h += `<h2>6. School by school</h2>`;
     for (const e of r.schools) h += schoolBlock(e, name, dataOnly);
   }
 
   if (r.suggestions.length) {
-    h += `<h2>6. Schools you might also look at</h2><p>Not on your shortlist, but within ${r.family.maxKm || 8} km and scoring at least as well on your child’s needs and your priorities as your lowest-rated shortlisted school.</p>`;
+    h += `<h2>7. Schools you might also look at</h2><p>Not on your shortlist, but within ${r.family.maxKm || 8} km and scoring at least as well on your child’s needs and your priorities as your lowest-rated shortlisted school.</p>`;
     for (const e of r.suggestions) h += `<div class="suggest"><strong>${esc(e.school.name)}</strong> <span class="band ${e.bandKey}">${esc(e.band)}</span> <span class="muted">· ${e.factors.distanceKm} km · ${esc(e.school.council || '')}</span>${list(e.suits.slice(0, 3), '')}</div>`;
   }
 
   // Questions
   if (r.generalQuestions.length) {
-    h += `<h2>7. Questions to ask on every visit</h2><p>Tailored to ${name}. Ask the same questions everywhere so you can compare like with like.</p><ul class="questions">${r.generalQuestions.map(q => `<li>${esc(q)}</li>`).join('')}</ul>`;
+    h += `<h2>8. Questions to ask on every visit</h2><p>Tailored to ${name}. Ask the same questions everywhere so you can compare like with like.</p><ul class="questions">${r.generalQuestions.map(q => `<li>${esc(q)}</li>`).join('')}</ul>`;
   }
 
-  h += `<h2>8. Talking it through with ${name}</h2>
-<ul><li>Ask what they noticed at each school (the people, the feel, the lunch queue), not just which they liked best.</li>
+  h += `<h2>9. Talking it through with ${name}</h2>
+<ul><li>Ask for their view of each school <strong>before</strong> you share yours. Once they know what you think, you’re hearing your own opinion back.</li>
+<li>Ask what they noticed at each school (the people, the feel, the lunch queue), not just which they liked best.</li>
+<li>Try a premortem together: “Imagine it’s Year 8 and it hasn’t gone well. What went wrong?” Do it for each of your top choices. It surfaces worries that “which did you like?” never does.</li>
 <li>Ask: “Where could you see yourself having a good day? Where would a bad day be easier to handle?”</li>
 <li>Their view matters even if you weigh things differently. Children who feel they had a say tend to settle better.</li>
 <li>Whatever the outcome in March, children adapt. Most children who are anxious in July are settled by October half-term.</li></ul>`;
 
   // Evidence & caveats
   h += `<h2>How this report works</h2>
-<p>The “describe your child” statements are everyday versions of well-researched temperament and personality dimensions. They are <strong>not</strong> a psychological assessment and have not been validated as a scale; they are a structured way to think about fit. Each school’s match combines those needs with your priorities, published data and your own visit ratings, weighting the things that matter most for your child. Where data is missing the match is pulled towards “mixed” rather than guessed.</p>
+<p>The “describe your child” statements are everyday versions of well-researched temperament and personality dimensions. They are <strong>not</strong> a psychological assessment and have not been validated as a scale; they are a structured way to think about fit. Each school’s match combines those needs with your priorities and the published data, weighting the things that matter most for your child. Where data is missing the match is pulled towards “mixed” rather than guessed.</p>
+<p>Your visit impressions are deliberately <strong>not</strong> part of the match. Counting them would hand your own view back to you with the tool’s authority. Instead they are set beside the evidence so you can see where the two agree and where they don’t. The visit checklist asks for specific observations before an overall verdict, because one striking feature on an open evening can colour everything else (the “halo effect”).</p>
 <details class="evidence"><summary>The research behind it</summary><dl>${Object.values(EVIDENCE).map(e => `<dt>${esc(e.short)}</dt><dd>${e.refs.map(esc).join(' · ')}</dd>`).join('')}</dl></details>
 <p class="fine">School data: ${esc(dataMeta.gcseYear || '')} GCSE results, Ofsted and pupil data compiled by <a href="https://findgreatschools.co.uk/gcse-results/bristol">FindGreatSchools</a> from DfE and Ofsted sources (retrieved ${esc(dataMeta.retrieved || '')}). Verify against <a href="https://www.compare-school-performance.service.gov.uk/">DfE Compare School Performance</a> and <a href="https://reports.ofsted.gov.uk/">Ofsted</a>. Admissions: you apply through your <a href="https://www.gov.uk/apply-for-secondary-school-place">home council</a>, even for schools in a neighbouring council area. This tool does not assess eligibility or catchment.</p>`;
   return h;
@@ -177,6 +201,18 @@ function motivationNote(m) {
   return 'Praise and rewards work in the short term. Over time it helps if the school also builds interest and pride in the work itself.';
 }
 
+const OBS_WORD = { yes: 'Yes', partly: 'Partly', no: 'No' };
+// The family's own impressions, shown as theirs: alongside the evidence, never as reasons.
+function visitBox(im) {
+  if (!im || !(im.fit || im.child || im.observed.length || im.notes || im.childNote)) return '';
+  const rows = [
+    im.child && `Your child’s view: ${im.child}/5${im.childNote ? `: “${esc(im.childNote)}”` : ''}`,
+    ...im.observed.map(o => `${esc(o.text)}: <strong>${OBS_WORD[o.answer]}</strong>${o.matters ? ' <span class="muted">(matters for your child)</span>' : ''}`),
+    im.fit && `Your overall verdict: ${im.fit}/5`,
+  ].filter(Boolean);
+  return `<div class="visit-box"><h4>Your visit <span class="muted">(your impressions; not counted in the match)</span></h4>${rows.length ? `<ul>${rows.map(r => `<li>${r}</li>`).join('')}</ul>` : ''}${im.notes ? `<p><strong>Your notes:</strong> ${esc(im.notes)}</p>` : ''}</div>`;
+}
+
 function schoolBlock(e, name, dataOnly) {
   const s = e.school;
   return `<div class="schoolprint">
@@ -184,7 +220,7 @@ function schoolBlock(e, name, dataOnly) {
 <p class="muted">${esc([s.street, s.postcode].filter(Boolean).join(', '))} · ${esc(s.ageRange)} · ${esc(s.type || '')}${s.trust ? ` · ${esc(titleCase(s.trust))}` : ''}${s.website ? ` · <a href="${esc(s.website)}">website</a>` : ''}</p>
 <div class="twocol"><div><h4>${dataOnly ? 'Strengths on the data' : `Why it may suit ${name}`}</h4>${list(e.suits, 'Nothing stands out strongly either way on the published evidence.')}</div>
 <div><h4>Things to weigh</h4>${list(e.weigh, 'No particular concerns on the published evidence.')}</div></div>
-${e.visit?.notes ? `<p><strong>Your notes:</strong> ${esc(e.visit.notes)}</p>` : ''}
+${visitBox(e.impressions)}
 ${e.questions.length ? `<h4>Ask on your visit</h4>${list(e.questions, '')}` : ''}
 ${driversTable(e)}
 <details><summary>Key facts</summary>${list(e.facts, '')}<p class="fine"><a href="${esc(s.profileUrl)}">Full data profile</a></p></details>
