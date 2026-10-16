@@ -88,6 +88,7 @@ export function renderReport(r, { dataMeta = {}, preparedDate = new Date() } = {
 <p>${Name} ${esc(summary)}. ${esc(implication)}</p></div>`;
     }
     h += `</div>`;
+    h += `<p class="notice"><strong>This is a snapshot, not a fixed picture.</strong> Traits are still settling at this age, and the years from about 10 to 14 bring predictable, usually temporary, shifts. Many children become less organised and more prone to worry in Years 7–9 before levelling out again. Use this profile for the move to secondary, which is where it matters most, rather than as a forecast of who ${name} will be at 16.</p>`;
   }
   const mot = r.child.motivators.map(id => MOTIVATORS.find(m => m.id === id)?.label).filter(Boolean);
   if (mot.length) h += `<p><strong>What makes them try hard:</strong> ${esc(mot.join('; ').toLowerCase())}. ${motivationNote(r.child.motivators)}</p>`;

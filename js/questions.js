@@ -142,6 +142,10 @@ export const EVIDENCE = {
     short: 'Children differ in stable, measurable ways (temperament) that shape how they experience school. Parent ratings of these traits predict school adjustment and attainment.',
     refs: ['Shiner & Caspi (2003), J. Child Psychology & Psychiatry 44(1)', 'Rothbart (2007), Current Directions in Psychological Science 16(4)', 'Poropat (2014), Learning & Individual Differences 34'],
   },
+  change: {
+    short: 'Personality becomes steadily more stable with age but is only moderately stable at 11. Early adolescence brings a typical, mostly temporary, dip in conscientiousness and rise in negative emotionality.',
+    refs: ['Roberts & DelVecchio (2000), Psychological Bulletin 126(1)', 'Soto et al. (2011), J. Personality & Social Psychology 100(2)', 'Soto & Tackett (2015), Current Directions in Psychological Science 24(5)'],
+  },
   fit: {
     short: 'Young adolescents do best when the school environment matches their developmental needs, especially for supportive relationships with teachers and a growing say in their own learning. A mismatch is linked to drops in motivation after the move to secondary school.',
     refs: ['Eccles et al. (1993), “Stage–environment fit”, American Psychologist 48(2)'],
