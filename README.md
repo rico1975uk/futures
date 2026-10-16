@@ -1,18 +1,16 @@
 # Futures: choosing a Bristol secondary school
 
-A free, private decision aid for parents in the Bristol area. A parent describes their child in everyday terms, sets their family's priorities, shortlists schools and records visit impressions. They get a personalised, evidence-based qualitative report, plus an optional AI write-up.
+A free, private decision aid for parents in the Bristol area. A parent describes their child in everyday terms, sets their family's priorities, shortlists schools and records visit impressions. They get a personalised, evidence-based qualitative report, plus ready-made prompts to research further with their own AI assistant. Everything runs in the browser and nothing is sent anywhere.
 
 ## Run it locally
 
 ```bash
-npm install
-npm start               # http://localhost:8787 (AI write-up on if ANTHROPIC_API_KEY is set, e.g. in .env)
-npm run start:mock      # same, with a deterministic stand-in for the AI (no key needed)
-npm test                # engine, privacy and server tests
-node scripts/sample-reports.mjs   # writes samples/*.html for six contrasting test children
+npm start        # http://localhost:8787 (no install needed: zero dependencies)
+npm test         # engine, prompt-privacy and server tests
+npm run samples  # writes samples/*.html for six contrasting test children
 ```
 
-For real AI write-ups, copy `.env.example` to `.env` and add an Anthropic API key.
+The site is plain static files (`index.html`, `css/`, `js/`), so it can be hosted anywhere, e.g. GitHub Pages.
 
 ## How it works
 
@@ -22,7 +20,7 @@ For real AI write-ups, copy `.env.example` to `.env` and add an Anthropic API ke
 | Questions | `js/questions.js` | "Describe your child": 19 everyday statements across 7 dimensions (social energy, worry, self-organisation, curiosity, environmental sensitivity, need for structure, need for autonomy), plus motivation (self-determination theory), transition/wellbeing factors and parent-reported attainment. Evidence notes and references sit alongside. |
 | Engine | `js/engine.js` | Pure functions. Profile → needs (e.g. *strong pastoral care*, *stretch*, *calm environment*) → per-school factor weights → a match band with plain-English reasons, concerns and tailored visit questions. Missing data pulls a school toward "mixed" rather than flattering it. Visit ratings can carry as much weight as all the published data. |
 | Report | `js/report.js` | Printable HTML report. |
-| AI write-up | `js/ai-payload.js`, `lib/narrative.mjs`, `server.mjs` | Optional. The browser builds a **de-identified** summary (no name, postcode or raw answers; parents can preview it). The server validates it and composes the prompt itself, so the endpoint can't be used as a general Claude proxy. Uses `claude-opus-5-5` with structured JSON output, server-side refusal fallback and a per-IP rate limit. |
+| Own-AI prompts | `js/prompts.js` | After the report, parents get copy-and-paste prompts for Claude, Gemini or ChatGPT: *talk it through*, *could we get a place?* (admissions distances, which is our biggest data gap), one *research this school* prompt per shortlisted school tailored to the child's needs and interests, a head-to-head of the top two, and *plan our visits*. Privacy switches: postcode district (on), visit notes (on), wellbeing details (off), child's name (off). Research prompts only ever carry needs, interests and attainment level. |
 
 ## Evidence base (summary)
 

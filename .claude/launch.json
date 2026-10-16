@@ -1,6 +1,6 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "futures-mock", "runtimeExecutable": "node", "runtimeArgs": ["server.mjs", "--mock"], "port": 8787 }
+    { "name": "futures", "runtimeExecutable": "node", "runtimeArgs": ["server.mjs"], "port": 8787 }
   ]
 }

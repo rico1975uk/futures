@@ -11,7 +11,7 @@
 <header class="site">
   <div class="eyebrow">Futures · a family decision tool · Bristol area</div>
   <h1>Which secondary school might suit your child?</h1>
-  <p>Describe your child in everyday terms, tell us what matters to your family and pick the schools you're considering. You'll get a personalised, evidence-based report to help you decide. Your answers stay on this device unless you choose the optional AI write-up.</p>
+  <p>Describe your child in everyday terms, tell us what matters to your family and pick the schools you're considering. You'll get a personalised, evidence-based report to help you decide. Your answers stay on this device.</p>
 </header>
 
 <div class="layout">
@@ -25,6 +25,7 @@
     <a href="#family">5. What matters to you</a>
     <a href="#visits">6. Your visits</a>
     <a href="#report-section">7. Your report</a>
+    <a href="#own-ai">8. Dig deeper with AI</a>
   </nav>
   <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
   <p class="fine" id="progress-text"></p>
@@ -112,25 +113,32 @@
 <!-- 7. REPORT -->
 <section class="panel noprint" id="report-section">
   <h2>Your personalised report</h2>
-  <p class="intro">Generated on this device in an instant. You can then add an optional AI write-up.</p>
+  <p class="intro">Generated instantly on this device. Nothing is sent anywhere.</p>
   <div class="actions">
     <button class="btn" id="generate">Generate my report</button>
     <button class="btn secondary" id="print" disabled>Print / save as PDF</button>
     <button class="btn secondary" id="save" disabled>Download as HTML</button>
     <button class="btn ghost" id="reset">Clear all answers</button>
   </div>
-  <div class="ai-box" id="ai-box" hidden>
-    <h3>Optional: AI write-up</h3>
-    <p>Claude can turn your report into a considered, narrative write-up that weighs the trade-offs between your schools. This sends a <strong>de-identified summary</strong> to Anthropic: trait levels, the needs we identified, your priorities and the school evidence. Your child's name, your postcode and individual answers are not sent.</p>
-    <label class="choice"><input type="checkbox" id="ai-notes" checked> Include my visit notes (check they don't contain names)</label>
-    <div class="actions"><button class="btn" id="ai-go">Write it up with AI</button><button class="btn ghost" id="ai-preview">See exactly what will be sent</button></div>
-    <pre id="ai-payload" class="payload" hidden></pre>
-    <p id="ai-status" class="fine" aria-live="polite"></p>
-  </div>
   <div class="notice"><p><strong>Privacy:</strong> the questionnaire and main report run entirely in your browser. Answers are saved only in this browser's storage. Use “Clear all answers” on a shared computer.</p></div>
 </section>
 
 <section class="panel report" id="output" aria-live="polite"></section>
+
+<section class="panel noprint" id="own-ai" hidden>
+  <div class="tag">Take it further</div>
+  <h2>Dig deeper with your own AI assistant</h2>
+  <p class="intro">Our report only knows what's in the published data and your answers. An AI assistant that can search the web, such as <a href="https://claude.ai" target="_blank" rel="noopener">Claude</a>, <a href="https://gemini.google.com" target="_blank" rel="noopener">Gemini</a> or <a href="https://chatgpt.com" target="_blank" rel="noopener">ChatGPT</a>, can fill the gaps: admissions distances, transition programmes, behaviour policies, clubs and open-evening dates. Copy a prompt, paste it into your assistant, and check the links it gives you.</p>
+  <fieldset class="prompt-options"><legend>What to include in the prompts</legend>
+    <label class="choice"><input type="checkbox" id="pa-area" checked> My postcode district (helps with admissions questions)</label>
+    <label class="choice"><input type="checkbox" id="pa-notes" checked> My visit notes</label>
+    <label class="choice"><input type="checkbox" id="pa-wellbeing"> Wellbeing details (worries, friendships, being picked on) in the “talk it through” prompt</label>
+    <label class="choice"><input type="checkbox" id="pa-name"> My child's first name</label>
+  </fieldset>
+  <p class="fine">Whatever you paste goes to that AI company under your own account and its privacy terms. The prompts never include your full address or your individual answers.</p>
+  <div class="actions"><button class="btn secondary" id="copy-all">Copy all prompts</button></div>
+  <div id="prompt-list"></div>
+</section>
 </main>
 </div>
 <footer class="site noprint"><p>Futures is a decision aid, not an admissions service or a school ranking. School data from DfE and Ofsted via FindGreatSchools; see the report for sources.</p></footer>

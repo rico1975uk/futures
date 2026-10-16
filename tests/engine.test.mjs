@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { SCHOOLS, OUTCODES } from '../js/data/schools.js';
 import { evaluate, scoreProfile, buildContext, normaliseOutcode, transitionOutlook } from '../js/engine.js';
 import { renderReport } from '../js/report.js';
-import { buildAiPayload } from '../js/ai-payload.js';
+import { buildPrompts, allPromptsText } from '../js/prompts.js';
 import { PERSONAS, inputFor } from './personas.mjs';
 
 const ctx = buildContext(SCHOOLS);
@@ -121,12 +121,38 @@ test('empty and partial input never crashes', () => {
   assert.match(text(renderReport(evaluate({}, SCHOOLS, ctx))), /haven’t shortlisted/);
 });
 
-test('AI payload is de-identified', () => {
-  for (const key of Object.keys(PERSONAS)) {
-    const r = run(key, { visits: { '147072': { fit: 4, notes: `Robin liked the art room, near our BS7 house` } } });
-    const json = JSON.stringify(buildAiPayload(r));
-    if (r.child.name) assert.ok(!new RegExp(`\\b${r.child.name}\\b`, 'i').test(json), `${key}: name leaked`);
-    assert.ok(!/\bBS7\b|\bBS13\b/.test(json), `${key}: home outcode leaked`);
-    assert.ok(!json.includes('"answers"'), 'raw answers are never sent');
-  }
+test('prompts are tailored to the child and shortlist', () => {
+  const anx = buildPrompts(run('anxiousSensitive'));
+  const bright = buildPrompts(run('brightIndependent'));
+  // one research prompt per shortlisted school, plus context, admissions, compare and visit
+  assert.equal(anx.length, 6 + 4);
+  assert.deepEqual(anx.map(p => p.id).slice(0, 2), ['context', 'admissions']);
+  const research = (ps, urn) => ps.find(p => p.id === 'research-' + urn).text;
+  assert.match(research(anx, '147072'), /Pastoral support/);
+  assert.match(research(anx, '147072'), /quieter spaces/);
+  assert.doesNotMatch(research(anx, '147072'), /stretch high attainers/);
+  assert.match(research(bright, '147072'), /stretch high attainers/);
+  assert.match(research(bright, '147072'), /maths and puzzles, science and how things work, music/);
+  assert.match(anx.find(p => p.id === 'compare').title, / vs /);
+  assert.notEqual(allPromptsText(anx), allPromptsText(bright));
+  assert.match(buildPrompts(run('southBristolFaith')).find(p => p.id === 'admissions').text, /faith, /);
+});
+
+test('prompt privacy options are respected', () => {
+  const r = run('anxiousSensitive', { visits: { '147072': { fit: 4, notes: 'Loved the art room' } } });
+  const def = allPromptsText(buildPrompts(r));
+  assert.ok(!/\bRobin\b/.test(def), 'name is off by default');
+  assert.match(def, /BS7 postcode district/, 'area is on by default');
+  assert.match(def, /Loved the art room/);
+  const strict = allPromptsText(buildPrompts(r, { includeArea: false, includeNotes: false }));
+  // School postcodes (e.g. "BS7 9BY") legitimately remain; the family's own district must not.
+  assert.ok(!/\bBS7\b(?! \d)/.test(strict), 'home district removed');
+  assert.ok(!strict.includes('Loved the art room'));
+  assert.match(allPromptsText(buildPrompts(r, { includeName: true })), /\bRobin\b/);
+  assert.ok(!def.includes('soc1') && !def.includes('"answers"'), 'raw answers never included');
+  assert.ok(!/picked on/i.test(def), 'wellbeing details are off by default');
+  const wb = buildPrompts(r, { includeWellbeing: true });
+  assert.match(wb.find(p => p.id === 'context').text, /picked on/i);
+  assert.ok(!/picked on/i.test(wb.find(p => p.id === 'research-147072').text), 'research prompts never carry wellbeing details');
+  assert.equal(buildPrompts(evaluate({}, SCHOOLS, ctx)).length, 0, 'no shortlist, no prompts');
 });

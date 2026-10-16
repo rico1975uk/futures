@@ -1,19 +1,16 @@
 {
   "name": "futures",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "description": "Bristol secondary school decision aid for parents",
   "type": "module",
   "scripts": {
-    "start": "node --env-file-if-exists=.env server.mjs",
-    "start:mock": "node server.mjs --mock",
+    "start": "node server.mjs",
     "test": "node --test tests/*.test.mjs",
-    "build-data": "node scripts/build-data.mjs"
+    "build-data": "node scripts/build-data.mjs",
+    "samples": "node scripts/sample-reports.mjs"
   },
   "engines": {
     "node": ">=20"
-  },
-  "dependencies": {
-    "@anthropic-ai/sdk": "^0.135.0"
   }
 }

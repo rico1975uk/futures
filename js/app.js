@@ -3,7 +3,7 @@ import { SCHOOLS, OUTCODES, DATA_META } from './data/schools.js';
 import { DIMENSIONS, LIKERT, MOTIVATORS, INTERESTS, ATTAINMENT_LEVELS, SUBJECTS, TRANSITION, EVIDENCE } from './questions.js';
 import { evaluate, buildContext, haversineKm, normaliseOutcode, yearGroupSize } from './engine.js';
 import { renderReport, esc } from './report.js';
-import { buildAiPayload } from './ai-payload.js';
+import { buildPrompts, allPromptsText } from './prompts.js';
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
@@ -151,43 +151,35 @@ function updateProgress() {
 }
 
 // ---------- report ----------
-let lastResult = null, lastAiHtml = null;
+let lastResult = null;
 function generate() {
   lastResult = evaluate(collect(), SCHOOLS, CTX);
-  lastAiHtml = null;
-  showReport();
-  $('#print').disabled = $('#save').disabled = false;
-  $('#output').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  if (aiAvailable && lastResult.schools.length) { $('#ai-box').hidden = false; $('#ai-status').textContent = ''; $('#ai-payload').hidden = true; }
-}
-function showReport() {
-  $('#output').innerHTML = renderReport(lastResult, { ai: lastAiHtml, dataMeta: DATA_META });
+  $('#output').innerHTML = renderReport(lastResult, { dataMeta: DATA_META });
   $('#output').classList.add('visible');
+  $('#print').disabled = $('#save').disabled = false;
+  renderPrompts();
+  $('#output').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-// ---------- AI write-up ----------
-let aiAvailable = false;
-fetch('api/health').then(r => r.ok ? r.json() : null).then(j => { aiAvailable = !!j?.ai; }).catch(() => {});
-function aiPayload() { return buildAiPayload(lastResult, { includeNotes: $('#ai-notes').checked }); }
-function paragraphs(t) { return String(t || '').split(/\n\s*\n/).map(p => `<p>${esc(p.trim())}</p>`).join(''); }
-async function runAi() {
-  const btn = $('#ai-go');
-  btn.disabled = true; $('#ai-status').textContent = 'Writing… this usually takes 20–60 seconds.';
-  try {
-    const res = await fetch('api/narrative', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(aiPayload()) });
-    const j = await res.json();
-    if (!res.ok) throw new Error(j.error || 'Something went wrong');
-    lastAiHtml = paragraphs(j.overview)
-      + (j.schools || []).map(s => `<h4>${esc(s.name)}</h4>${paragraphs(s.narrative)}`).join('')
-      + `<h4>The real choice</h4>${paragraphs(j.tradeoffs)}`
-      + `<h4>Next steps</h4><ul>${(j.next_steps || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>`
-      + `<p class="fine">Written by AI (${esc(j.model || 'Claude')}) from the de-identified summary. It can make mistakes, so check anything important against the evidence below.</p>`;
-    showReport();
-    $('#ai-status').textContent = 'Done. The write-up has been added to the top of your report.';
-    $('.r-ai')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch (e) {
-    $('#ai-status').textContent = `AI write-up unavailable: ${e.message}`;
-  } finally { btn.disabled = false; }
+// ---------- prompts for the parent's own AI ----------
+let lastPrompts = [];
+function renderPrompts() {
+  const box = $('#own-ai');
+  if (!lastResult?.schools.length) { box.hidden = true; return; }
+  lastPrompts = buildPrompts(lastResult, { includeArea: $('#pa-area').checked, includeName: $('#pa-name').checked, includeNotes: $('#pa-notes').checked, includeWellbeing: $('#pa-wellbeing').checked });
+  $('#prompt-list').innerHTML = lastPrompts.map((p, i) => `<article class="prompt-card">
+    <div class="prompt-head"><div><h3>${esc(p.title)}</h3><p class="muted">${esc(p.when)}</p></div>
+    <button class="btn" data-copy="${i}">Copy prompt</button></div>
+    <details><summary>Show prompt</summary><pre class="prompt-text">${esc(p.text)}</pre></details></article>`).join('');
+  box.hidden = false;
+}
+async function copyText(text, btn) {
+  try { await navigator.clipboard.writeText(text); }
+  catch {
+    const ta = Object.assign(document.createElement('textarea'), { value: text });
+    document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  const old = btn.textContent; btn.textContent = 'Copied ✓'; setTimeout(() => { btn.textContent = old; }, 1800);
 }
 
 // ---------- events ----------
@@ -230,9 +222,9 @@ function bind() {
   $('#print').addEventListener('click', () => window.print());
   $('#reset').addEventListener('click', () => { if (!confirm('Clear all your answers from this browser?')) return; try { localStorage.removeItem(STORE); } catch {} location.reload(); });
   $('#save').addEventListener('click', downloadHtml);
-  $('#ai-go').addEventListener('click', runAi);
-  $('#ai-preview').addEventListener('click', () => { const p = $('#ai-payload'); p.hidden = !p.hidden; p.textContent = JSON.stringify(aiPayload(), null, 2); });
-  $('#ai-notes').addEventListener('change', () => { if (!$('#ai-payload').hidden) $('#ai-payload').textContent = JSON.stringify(aiPayload(), null, 2); });
+  ['#pa-area', '#pa-name', '#pa-notes', '#pa-wellbeing'].forEach(id => $(id).addEventListener('change', renderPrompts));
+  $('#prompt-list').addEventListener('click', e => { const b = e.target.closest('[data-copy]'); if (b) copyText(lastPrompts[+b.dataset.copy].text, b); });
+  $('#copy-all').addEventListener('click', e => copyText(allPromptsText(lastPrompts), e.target));
 }
 
 async function downloadHtml() {

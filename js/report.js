@@ -50,7 +50,7 @@ const TRANSITION_TEXT = {
 
 const bandWord = { high: 'High', mid: 'Middle', low: 'Low' };
 
-export function renderReport(r, { ai = null, dataMeta = {}, preparedDate = new Date() } = {}) {
+export function renderReport(r, { dataMeta = {}, preparedDate = new Date() } = {}) {
   const name = r.child.name ? esc(r.child.name) : 'your child';
   const Name = r.child.name ? esc(r.child.name) : 'Your child';
   const P = r.child.profile;
@@ -72,7 +72,6 @@ export function renderReport(r, { ai = null, dataMeta = {}, preparedDate = new D
   }
   h += `</section>`;
 
-  if (ai) h += `<section class="r-ai"><h2>A considered view <span class="pill">AI write-up</span></h2>${ai}</section>`;
 
   // Child profile
   h += `<h2>1. ${Name} at a glance</h2>`;
