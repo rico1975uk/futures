@@ -150,7 +150,8 @@ export const OBSERVATIONS = [
 ];
 export const OBS_SCALE = [['yes', 'Yes', 1], ['partly', 'Partly', 0.5], ['no', 'No', 0], ['', 'Didn’t see', null]];
 
-// Short, honest summaries of the research the engine leans on. Shown in the report's “Why we ask” section.
+// Short, honest summaries of the research the engine leans on. Shown in the form's “Why we ask these questions”
+// panels and in the report's “The research behind it”.
 export const EVIDENCE = {
   personality: {
     short: 'Children differ in stable, measurable ways (temperament) that shape how they experience school. Parent ratings of these traits predict school adjustment and attainment.',

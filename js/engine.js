@@ -1,5 +1,5 @@
 // Matching engine: child profile + family priorities + school data -> structured, qualitative evaluation.
-// Pure functions only (no DOM) so it can be unit-tested in Node and reused by the AI layer.
+// Pure functions only (no DOM) so it can be unit-tested in Node. Scoring constants are in METHOD (documented in docs/METHODOLOGY.md).
 import { DIMENSIONS, ATTAINMENT_LEVELS, SUBJECTS, MOTIVATORS, INTERESTS, OBSERVATIONS } from './questions.js';
 
 // ---------- helpers ----------
@@ -222,23 +222,40 @@ export function schoolFactors(s, ctx, home) {
 }
 
 // ---------- 4. evaluation ----------
-const DEFAULT_PRIORITIES = { results: 3, behaviour: 3, pastoral: 3, journey: 3, sixth: 1 };
+// All scoring constants live here so docs/METHODOLOGY.md can be checked against them (tests/docs.test.mjs).
+// They are judgement calls chosen to make the logic sensible, not values calibrated against outcomes.
+export const METHOD = {
+  defaultPriorities: { results: 3, behaviour: 3, pastoral: 3, journey: 3, sixth: 1 },
+  // weight = base + Σ(slider × k) + Σ(need strength × k) + conditional extras
+  weights: {
+    results: { sliders: { results: 0.8 } },
+    stretch: { sliders: { results: 0.4 }, needs: { stretch: 4 } },
+    valueAdded: { sliders: { results: 0.4 }, needs: { support: 2 } },
+    calm: { sliders: { behaviour: 1 }, needs: { calm: 4, structure: 1.5 }, ifStructuredDiscipline: 1.5 },
+    pastoral: { sliders: { pastoral: 1 }, needs: { pastoral: 4, belonging: 1 } },
+    support: { needs: { support: 4 } },
+    proximity: { sliders: { journey: 1 } },
+    sixth: { sliders: { sixth: 1 } },
+    overall: { base: 1.5, needs: { pastoral: 1, calm: 1 } },
+  },
+  // Year-group size is one net factor: |smaller pull − larger pull|.
+  size: { smaller: { ifPreferred: 3, needs: { belonging: 2, calm: 1 } }, larger: { ifPreferred: 3, needs: { breadth: 2 } } },
+  fixed: { faith: 3, singleSex: 3, ineligible: 50, friends: 2 },
+  bands: { strong: 0.75, good: 0.63, mixed: 0.5 },
+  // Score kept = 0.4 + 0.6 × coverage of its distance from 0.5 (missing data pulls towards "mixed").
+  coverageFloor: 0.4,
+};
+const DEFAULT_PRIORITIES = METHOD.defaultPriorities;
 
 function weightsFor(input, needs) {
   const pr = { ...DEFAULT_PRIORITIES, ...(input.family?.priorities || {}) };
   const n = id => needs.find(x => x.id === id)?.strength || 0;
   const fam = input.family || {};
-  const w = {
-    results: pr.results * 0.8,
-    stretch: pr.results * 0.4 + n('stretch') * 4,
-    valueAdded: pr.results * 0.4 + n('support') * 2,
-    calm: pr.behaviour + n('calm') * 4 + n('structure') * 1.5 + (fam.discipline === 'structured' ? 1.5 : 0),
-    pastoral: pr.pastoral + n('pastoral') * 4 + n('belonging') * 1,
-    support: n('support') * 4,
-    proximity: pr.journey,
-    sixth: pr.sixth,
-    overall: 1.5 + n('pastoral') + n('calm'),
-  };
+  const sum = (obj, get) => Object.entries(obj || {}).reduce((t, [k, x]) => t + get(k) * x, 0);
+  const w = {};
+  for (const [key, r] of Object.entries(METHOD.weights)) {
+    w[key] = (r.base || 0) + sum(r.sliders, k => pr[k]) + sum(r.needs, n) + (r.ifStructuredDiscipline && fam.discipline === 'structured' ? r.ifStructuredDiscipline : 0);
+  }
   // Year-group size: signals can pull both ways (e.g. family prefers small, child is very sociable).
   // Net them into one factor so the breakdown never shows a school as both "strong" and "weak" on size.
   const smallWhy = [fam.sizePref === 'small' && 'you’d prefer a smaller year group',
@@ -246,15 +263,16 @@ function weightsFor(input, needs) {
     n('calm') && 'your child finds busy places draining'].filter(Boolean);
   const largeWhy = [fam.sizePref === 'large' && 'you’d prefer a larger year group',
     n('breadth') && 'your child’s sociability suggests a bigger year group, with more people and clubs, could suit them'].filter(Boolean);
-  const smallPull = (fam.sizePref === 'small' ? 3 : 0) + n('belonging') * 2 + n('calm') * 1;
-  const largePull = (fam.sizePref === 'large' ? 3 : 0) + n('breadth') * 2;
+  const S = METHOD.size;
+  const smallPull = (fam.sizePref === 'small' ? S.smaller.ifPreferred : 0) + sum(S.smaller.needs, n);
+  const largePull = (fam.sizePref === 'large' ? S.larger.ifPreferred : 0) + sum(S.larger.needs, n);
   w.size = Math.abs(smallPull - largePull);
   w.intended = Object.values(w).reduce((t, x) => t + x, 0);
   w.sizeMeta = { dir: smallPull >= largePull ? 'smaller' : 'larger', conflict: smallPull > 0 && largePull > 0, smallWhy, largeWhy };
   return w;
 }
 
-const BAND = [[0.75, 'strong'], [0.63, 'good'], [0.5, 'mixed'], [-1, 'weaker']];
+const BAND = [[METHOD.bands.strong, 'strong'], [METHOD.bands.good, 'good'], [METHOD.bands.mixed, 'mixed'], [-1, 'weaker']];
 const BAND_LABEL = {
   child: { strong: 'Strong match', good: 'Good match', mixed: 'Mixed match', weaker: 'Weaker match', none: 'Not enough information' },
   // With no child details there is nothing to "match": describe it as a comparison on the data instead.
@@ -305,18 +323,18 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
     push('sixth', w.sixth, f.sixth);
     push('overall', w.overall, f.overall);
     // Hard-ish family preferences.
-    if (fam.faith === 'want') push('faith', 3, s.religion ? 1 : 0);
-    if (fam.faith === 'avoid') push('faith', 3, s.religion ? 0 : 1);
+    if (fam.faith === 'want') push('faith', METHOD.fixed.faith, s.religion ? 1 : 0);
+    if (fam.faith === 'avoid') push('faith', METHOD.fixed.faith, s.religion ? 0 : 1);
     const sex = input.child?.sex;
-    if (s.gender === 'Girls' && sex === 'boy' || s.gender === 'Boys' && sex === 'girl') push('eligible', 50, 0);
-    if (fam.gender === 'single') push('gender', 3, s.gender !== 'Mixed' ? 1 : 0);
-    if (fam.gender === 'mixed') push('gender', 3, s.gender === 'Mixed' ? 1 : 0);
+    if (s.gender === 'Girls' && sex === 'boy' || s.gender === 'Boys' && sex === 'girl') push('eligible', METHOD.fixed.ineligible, 0);
+    if (fam.gender === 'single') push('gender', METHOD.fixed.singleSex, s.gender !== 'Mixed' ? 1 : 0);
+    if (fam.gender === 'mixed') push('gender', METHOD.fixed.singleSex, s.gender === 'Mixed' ? 1 : 0);
     // Visit impressions deliberately do NOT enter the score: the match is the tool's independent view of the
     // evidence, and impressions are compared against it instead (see compareImpressions). Whether friends are
     // going is a fact, not an impression, and is a well-evidenced protective factor for the move to Year 7.
     const v = input.visits?.[s.urn] || {};
     if (v.friends && (transition.level === 'extra' || transition.level === 'some' || needs.some(x => x.id === 'belonging')))
-      push('friends', 2, v.friends === 'several' ? 1 : v.friends === 'one' ? 0.75 : 0.3);
+      push('friends', METHOD.fixed.friends, v.friends === 'several' ? 1 : v.friends === 'one' ? 0.75 : 0.3);
 
     const tw = parts.reduce((t, p) => t + p.weight, 0);
     const raw = tw ? parts.reduce((t, p) => t + p.weight * p.value, 0) / tw : null;
@@ -325,7 +343,7 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
     const covered = parts.filter(p => dataKeys.includes(p.key)).reduce((t, p) => t + p.weight, 0);
     const intended = dataKeys.reduce((t, k) => t + (k === 'proximity' && !home ? 0 : (w[k] || 0)), 0);
     const coverage = intended ? clamp(covered / intended) : 1;
-    const score = raw == null ? null : 0.5 + (raw - 0.5) * (0.4 + 0.6 * coverage);
+    const score = raw == null ? null : 0.5 + (raw - 0.5) * (METHOD.coverageFloor + (1 - METHOD.coverageFloor) * coverage);
     const evidenceWeight = tw;
     const bandKey = score == null ? 'none' : BAND.find(([t]) => score >= t)[1];
     return { school: s, factors: f, parts, sizeMeta: w.sizeMeta, drivers: drivers(parts, f), coverage: round(coverage, 2), score: round(score, 3), bandKey, band: BAND_LABEL[mode][bandKey], evidenceWeight };
