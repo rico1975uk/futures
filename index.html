@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Futures | Bristol Secondary Schools</title>
+<meta name="description" content="A free, private decision aid for Bristol-area parents choosing a state secondary school.">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<header class="site">
+  <div class="eyebrow">Futures · a family decision tool · Bristol area</div>
+  <h1>Which secondary school might suit your child?</h1>
+  <p>Describe your child in everyday terms, tell us what matters to your family and pick the schools you're considering. You'll get a personalised, evidence-based report to help you decide. Your answers stay on this device unless you choose the optional AI write-up.</p>
+</header>
+
+<div class="layout">
+<aside class="noprint" aria-label="Sections">
+  <strong>Your questionnaire</strong>
+  <nav>
+    <a href="#schools">1. Choose schools <span class="count" id="nav-count"></span></a>
+    <a href="#child">2. Describe your child</a>
+    <a href="#transition">3. Wellbeing &amp; the move</a>
+    <a href="#learning">4. Learning</a>
+    <a href="#family">5. What matters to you</a>
+    <a href="#visits">6. Your visits</a>
+    <a href="#report-section">7. Your report</a>
+  </nav>
+  <div class="progress" aria-hidden="true"><span id="progress-bar"></span></div>
+  <p class="fine" id="progress-text"></p>
+  <p class="fine">Around 10 minutes. Every question is optional. Your answers are saved in this browser so you can come back.</p>
+</aside>
+
+<main>
+<!-- 1. SCHOOLS -->
+<section class="panel formpanel" id="schools">
+  <div class="tag">Step 1</div>
+  <h2>Choose the schools you're considering</h2>
+  <p class="intro">47 state secondary schools in the Bristol area, including some run by South Gloucestershire, North Somerset and Bath &amp; North East Somerset councils. Add up to 8 to your shortlist.</p>
+  <div class="twocol">
+    <div class="field"><label for="outcode">Your postcode district</label>
+      <input id="outcode" type="text" placeholder="e.g. BS7" maxlength="8" autocomplete="off" data-save>
+      <p class="hint">Just the first part (e.g. BS7). We use it only to estimate distances. <span id="outcode-status"></span></p></div>
+    <div class="field"><label for="search">Search schools</label>
+      <input id="search" type="search" placeholder="Name, area or postcode" autocomplete="off"></div>
+  </div>
+  <div class="filters" role="group" aria-label="Filters">
+    <label class="chip"><input type="checkbox" id="f-near"> Within <select id="f-km" aria-label="Distance"><option>3</option><option selected>5</option><option>8</option><option>12</option></select> km</label>
+    <label class="chip"><input type="checkbox" id="f-sixth"> Has a sixth form</label>
+    <label class="chip"><input type="checkbox" id="f-faith"> Faith schools only</label>
+    <label class="chip"><input type="checkbox" id="f-bristol"> Bristol City Council only</label>
+    <label for="sort" class="chip">Sort <select id="sort"><option value="distance">Nearest</option><option value="name">A–Z</option><option value="a8">GCSE results</option></select></label>
+  </div>
+  <div id="shortlist" class="shortlist" aria-live="polite"></div>
+  <div id="school-list" class="school-list"></div>
+</section>
+
+<!-- 2. CHILD -->
+<section class="panel formpanel" id="child">
+  <div class="tag">Step 2</div>
+  <h2>Describe your child</h2>
+  <p class="intro">Think about how your child <em>usually</em> is, across home and school, over the last six months, not on their best or worst day. There are no right answers, and every child has strengths at both ends of each scale.</p>
+  <div class="twocol">
+    <div class="field"><label for="name">First name or nickname (optional)</label><input id="name" type="text" maxlength="30" data-save><p class="hint">Only used to personalise the report on this device. Never sent anywhere.</p></div>
+    <div class="field"><label for="sex">Your child is a…</label><select id="sex" data-save><option value="">Prefer not to say</option><option value="girl">Girl</option><option value="boy">Boy</option></select><p class="hint">Only used so we don't suggest single-sex schools they couldn't attend.</p></div>
+  </div>
+  <div id="dims"></div>
+  <div class="field"><label>What most makes them want to try hard? <span class="muted">(pick up to two)</span></label><div class="choice-grid" id="motivators"></div></div>
+  <details class="why"><summary>Why we ask these questions</summary><div id="why-child"></div></details>
+</section>
+
+<!-- 3. TRANSITION -->
+<section class="panel formpanel" id="transition">
+  <div class="tag">Step 3</div>
+  <h2>Wellbeing and the move to Year 7</h2>
+  <p class="intro">Research on the move to secondary school points to a handful of factors that predict how the first year goes. None of them decide it, and all of them can be planned for.</p>
+  <div id="transition-qs"></div>
+  <details class="why"><summary>Why we ask these questions</summary><div id="why-transition"></div></details>
+</section>
+
+<!-- 4. LEARNING -->
+<section class="panel formpanel" id="learning">
+  <div class="tag">Step 4</div>
+  <h2>Learning and interests</h2>
+  <p class="intro">Your best sense from reports, parents' evenings or SATs practice. “Not sure” is fine.</p>
+  <div class="attain" id="attainment"></div>
+  <div class="field"><label>What do they love doing or learning about?</label><div class="choice-grid three" id="interests"></div></div>
+</section>
+
+<!-- 5. FAMILY -->
+<section class="panel formpanel" id="family">
+  <div class="tag">Step 5</div>
+  <h2>What matters to your family?</h2>
+  <p class="intro">These are <strong>your</strong> priorities. 0 means “not a factor”, 5 means “crucial”. The report also weights things according to what your child seems to need.</p>
+  <div id="prioritylist"></div>
+  <div class="twocol">
+    <div class="field"><label for="sizePref">Size of year group</label><select id="sizePref" data-save><option value="">No strong preference</option><option value="small">Prefer smaller</option><option value="large">Prefer larger</option></select></div>
+    <div class="field"><label for="discipline">Approach to behaviour</label><select id="discipline" data-save><option value="balanced">Clear boundaries with some flexibility</option><option value="structured">Very explicit, tightly enforced rules</option><option value="flexible">More flexibility and informal relationships</option></select></div>
+    <div class="field"><label for="faith">Faith schools</label><select id="faith" data-save><option value="">No preference</option><option value="want">Prefer a faith school</option><option value="avoid">Prefer a non-faith school</option></select></div>
+    <div class="field"><label for="gender">Mixed or single-sex</label><select id="gender" data-save><option value="">No preference</option><option value="mixed">Prefer mixed</option><option value="single">Prefer single-sex</option></select></div>
+  </div>
+</section>
+
+<!-- 6. VISITS -->
+<section class="panel formpanel" id="visits">
+  <div class="tag">Step 6</div>
+  <h2>Your visits and impressions</h2>
+  <p class="intro">Record impressions only where you have them. These count heavily in the report, because what you and your child saw is first-hand evidence that no dataset has.</p>
+  <div id="visit-inputs"><p class="muted">Add schools to your shortlist in Step 1 first.</p></div>
+</section>
+
+<!-- 7. REPORT -->
+<section class="panel noprint" id="report-section">
+  <h2>Your personalised report</h2>
+  <p class="intro">Generated on this device in an instant. You can then add an optional AI write-up.</p>
+  <div class="actions">
+    <button class="btn" id="generate">Generate my report</button>
+    <button class="btn secondary" id="print" disabled>Print / save as PDF</button>
+    <button class="btn secondary" id="save" disabled>Download as HTML</button>
+    <button class="btn ghost" id="reset">Clear all answers</button>
+  </div>
+  <div class="ai-box" id="ai-box" hidden>
+    <h3>Optional: AI write-up</h3>
+    <p>Claude can turn your report into a considered, narrative write-up that weighs the trade-offs between your schools. This sends a <strong>de-identified summary</strong> to Anthropic: trait levels, the needs we identified, your priorities and the school evidence. Your child's name, your postcode and individual answers are not sent.</p>
+    <label class="choice"><input type="checkbox" id="ai-notes" checked> Include my visit notes (check they don't contain names)</label>
+    <div class="actions"><button class="btn" id="ai-go">Write it up with AI</button><button class="btn ghost" id="ai-preview">See exactly what will be sent</button></div>
+    <pre id="ai-payload" class="payload" hidden></pre>
+    <p id="ai-status" class="fine" aria-live="polite"></p>
+  </div>
+  <div class="notice"><p><strong>Privacy:</strong> the questionnaire and main report run entirely in your browser. Answers are saved only in this browser's storage. Use “Clear all answers” on a shared computer.</p></div>
+</section>
+
+<section class="panel report" id="output" aria-live="polite"></section>
+</main>
+</div>
+<footer class="site noprint"><p>Futures is a decision aid, not an admissions service or a school ranking. School data from DfE and Ofsted via FindGreatSchools; see the report for sources.</p></footer>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
