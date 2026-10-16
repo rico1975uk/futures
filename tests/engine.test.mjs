@@ -191,3 +191,17 @@ test('every rating explains what drove it', () => {
   }
   assert.match(renderReport(run('brightIndependent')), /What drove this rating/);
 });
+
+test('year-group size is one net factor, and mixed signals are named as a trade-off', () => {
+  // Sociable child (wants a bigger pool) in a family that prefers a smaller year group.
+  const r = run('disorganisedSociable', { family: { outcode: 'BS7', priorities: { results: 3, behaviour: 3, pastoral: 3, journey: 3, sixth: 1 }, sizePref: 'small' } });
+  for (const e of r.schools) {
+    const sizeRows = e.drivers.filter(d => /year group/i.test(d.label));
+    assert.ok(sizeRows.length <= 1, `${e.school.name}: at most one size row`);
+  }
+  const bccs = r.schools.find(e => e.school.urn === '135575'); // small year group
+  assert.match(bccs.drivers.find(d => d.key === 'size').label, /smaller suits you/);
+  assert.ok(bccs.weigh.some(w => /Size is a trade-off for you: you’d prefer a smaller year group, but your child’s sociability/.test(w)));
+  // No conflict, no trade-off line.
+  assert.ok(!run('anxiousSensitive').schools.some(e => e.weigh.some(w => /Size is a trade-off/.test(w))));
+});

@@ -235,13 +235,22 @@ function weightsFor(input, needs) {
     calm: pr.behaviour + n('calm') * 4 + n('structure') * 1.5 + (fam.discipline === 'structured' ? 1.5 : 0),
     pastoral: pr.pastoral + n('pastoral') * 4 + n('belonging') * 1,
     support: n('support') * 4,
-    small: (fam.sizePref === 'small' ? 3 : 0) + n('belonging') * 2 + n('calm') * 1,
-    large: (fam.sizePref === 'large' ? 3 : 0) + n('breadth') * 2,
     proximity: pr.journey,
     sixth: pr.sixth,
     overall: 1.5 + n('pastoral') + n('calm'),
   };
+  // Year-group size: signals can pull both ways (e.g. family prefers small, child is very sociable).
+  // Net them into one factor so the breakdown never shows a school as both "strong" and "weak" on size.
+  const smallWhy = [fam.sizePref === 'small' && 'you’d prefer a smaller year group',
+    n('belonging') && 'your child’s answers suggest they’ll settle best where they can be known quickly',
+    n('calm') && 'your child finds busy places draining'].filter(Boolean);
+  const largeWhy = [fam.sizePref === 'large' && 'you’d prefer a larger year group',
+    n('breadth') && 'your child’s sociability suggests a bigger year group, with more people and clubs, could suit them'].filter(Boolean);
+  const smallPull = (fam.sizePref === 'small' ? 3 : 0) + n('belonging') * 2 + n('calm') * 1;
+  const largePull = (fam.sizePref === 'large' ? 3 : 0) + n('breadth') * 2;
+  w.size = Math.abs(smallPull - largePull);
   w.intended = Object.values(w).reduce((t, x) => t + x, 0);
+  w.sizeMeta = { dir: smallPull >= largePull ? 'smaller' : 'larger', conflict: smallPull > 0 && largePull > 0, smallWhy, largeWhy };
   return w;
 }
 
@@ -254,7 +263,7 @@ const BAND_LABEL = {
 const DRIVER_LABEL = {
   results: 'Headline GCSE results', stretch: 'Top grades (7+ in English and maths)', valueAdded: 'Results allowing for intake',
   calm: 'Behaviour and attendance (allowing for intake)', pastoral: 'Pastoral care and wellbeing', support: 'Catch-up support and inclusion',
-  small: 'Smaller year group', large: 'Larger year group', proximity: 'Distance from home', sixth: 'Has a sixth form',
+  proximity: 'Distance from home', sixth: 'Has a sixth form',
   overall: 'Overall Ofsted outcome', faith: 'Your faith-school preference', gender: 'Your mixed/single-sex preference',
   eligible: 'Eligibility (single-sex school)', visitFit: 'Your view of fit after visiting', visitChild: 'Your child’s view',
   visitFeel: 'Overall feel on your visit', friends: 'Friends likely to go',
@@ -262,7 +271,7 @@ const DRIVER_LABEL = {
 function drivers(parts, f) {
   const tw = parts.reduce((t, p) => t + p.weight, 0);
   return parts.map(p => ({
-    key: p.key, label: DRIVER_LABEL[p.key] || p.key, share: tw ? p.weight / tw : 0, value: p.value,
+    key: p.key, label: p.label || DRIVER_LABEL[p.key] || p.key, share: tw ? p.weight / tw : 0, value: p.value,
     weak: p.key === 'pastoral' && f.pastoralEvidence === 'weak',
   })).sort((a, b) => b.share - a.share);
 }
@@ -284,15 +293,15 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
   const evalSchool = s => {
     const f = schoolFactors(s, ctx, home);
     const parts = [];
-    const push = (key, weight, value) => { if (weight > 0 && value != null) parts.push({ key, weight, value }); };
+    const push = (key, weight, value, label) => { if (weight > 0 && value != null) parts.push({ key, weight, value, label }); };
     push('results', w.results, f.results);
     push('stretch', w.stretch, f.stretch);
     push('valueAdded', w.valueAdded, f.valueAdded);
     push('calm', w.calm, f.calm);
     push('pastoral', w.pastoral, f.pastoral);
     push('support', w.support, f.support);
-    push('small', w.small, f.small);
-    push('large', w.large, f.small == null ? null : 1 - f.small);
+    const sm = w.sizeMeta;
+    push('size', w.size, f.small == null ? null : sm.dir === 'smaller' ? f.small : 1 - f.small, `Year group size (on balance, ${sm.dir} suits you)`);
     push('proximity', w.proximity, f.proximity);
     push('sixth', w.sixth, f.sixth);
     push('overall', w.overall, f.overall);
@@ -316,7 +325,7 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
     const tw = parts.reduce((t, p) => t + p.weight, 0);
     const raw = tw ? parts.reduce((t, p) => t + p.weight * p.value, 0) / tw : null;
     // Missing data shouldn't flatter a school: pull the score toward neutral in proportion to what we couldn't assess.
-    const dataKeys = ['results', 'stretch', 'valueAdded', 'calm', 'pastoral', 'support', 'small', 'large', 'proximity', 'sixth', 'overall'];
+    const dataKeys = ['results', 'stretch', 'valueAdded', 'calm', 'pastoral', 'support', 'size', 'proximity', 'sixth', 'overall'];
     // Once a family has started visiting, an unvisited school is missing evidence too.
     const visitKeys = anyVisits ? ['visitFit', 'visitChild', 'visitFeel'] : [];
     const covered = parts.filter(p => dataKeys.includes(p.key) || visitKeys.includes(p.key)).reduce((t, p) => t + p.weight, 0);
@@ -325,7 +334,7 @@ export function evaluate(input, schools, ctx = buildContext(schools)) {
     const score = raw == null ? null : 0.5 + (raw - 0.5) * (0.4 + 0.6 * coverage);
     const evidenceWeight = tw;
     const bandKey = score == null ? 'none' : BAND.find(([t]) => score >= t)[1];
-    return { school: s, factors: f, parts, drivers: drivers(parts, f), coverage: round(coverage, 2), score: round(score, 3), bandKey, band: BAND_LABEL[mode][bandKey], evidenceWeight };
+    return { school: s, factors: f, parts, sizeMeta: w.sizeMeta, drivers: drivers(parts, f), coverage: round(coverage, 2), score: round(score, 3), bandKey, band: BAND_LABEL[mode][bandKey], evidenceWeight };
   };
 
   const shortlist = (input.shortlist || []).map(u => schools.find(s => s.urn === u)).filter(Boolean);
@@ -403,12 +412,19 @@ function explain(e, { needs, input, ctx, child }) {
 
   // Size
   if (f.yearGroup) facts.push(`Year group roughly ${f.yearGroup} pupils (area median ${M.cohort})${s.gcse.cohort ? '' : ', estimated'}.`);
-  const smallW = e.parts.find(p => p.key === 'small')?.weight || 0, largeW = e.parts.find(p => p.key === 'large')?.weight || 0;
-  if (f.small != null) {
-    if (smallW >= 2 && f.small >= 0.65) suits.push(`A smaller year group (about ${f.yearGroup}), which can make it easier to be known quickly.`);
-    if (smallW >= 2 && f.small <= 0.3) weigh.push(`A large year group (about ${f.yearGroup}). Ask how they make it feel small: tutor groups, houses, a Year 7 base.`);
-    if (largeW >= 2 && f.small <= 0.35) suits.push(`A large year group (about ${f.yearGroup}): more people to meet and usually more clubs and options.`);
-    if (largeW >= 2 && f.small >= 0.7) weigh.push(`A smaller year group (about ${f.yearGroup}), so the friendship pool and options may be narrower.`);
+  const sizeW = e.parts.find(p => p.key === 'size')?.weight || 0, sm = e.sizeMeta;
+  if (f.small != null && sm) {
+    const smallish = f.small >= 0.65, largish = f.small <= 0.35;
+    if (sm.dir === 'smaller' && sizeW >= 1.5) {
+      if (smallish) suits.push(`A smaller year group (about ${f.yearGroup}), which can make it easier to be known quickly.`);
+      if (largish) weigh.push(`A large year group (about ${f.yearGroup}). Ask how they make it feel small: tutor groups, houses, a Year 7 base.`);
+    }
+    if (sm.dir === 'larger' && sizeW >= 1.5) {
+      if (largish) suits.push(`A large year group (about ${f.yearGroup}): more people to meet and usually more clubs and options.`);
+      if (smallish) weigh.push(`A smaller year group (about ${f.yearGroup}), so the friendship pool and options may be narrower.`);
+    }
+    // Mixed signals on size are a genuine trade-off: say so where this school sits at one end.
+    if (sm.conflict && (smallish || largish)) weigh.push(`Size is a trade-off for you: ${sm.smallWhy.join(' and ')}, but ${sm.largeWhy.join(' and ')}. With a year group of about ${f.yearGroup}, this school is on the ${smallish ? 'small' : 'large'} side, so it’s worth deciding which matters more.`);
   }
 
   // Support
