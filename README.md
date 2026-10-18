@@ -10,6 +10,7 @@ A free, private decision aid for parents in the Bristol area. A parent describes
 npm start          # http://localhost:8787 (no install needed: zero dependencies)
 npm test           # engine, privacy, docs and server tests
 npm run samples    # regenerates samples/*.html for six contrasting test children
+npm run guide      # rebuilds guide.html (the parents' guide page) from parent_readme.md
 ```
 
 The site is plain static files (`index.html`, `css/`, `js/`) hosted on GitHub Pages from `main`. Pushing to `main` republishes in about a minute, and browsers may keep old files for up to 10 minutes.
@@ -58,7 +59,7 @@ Key behaviours:
 
 - **School data:** refresh once a year after GCSE results, or after a big Ofsted round. The source must first be moved to the official DfE and Ofsted downloads. The process and the build's safety checks are in [docs/DATA.md](docs/DATA.md).
 - **Changing the scoring:** edit `METHOD` in `js/engine.js` *and* the machine-checked block in `docs/METHODOLOGY.md`, then run `npm test` and `npm run samples`, and read the sample reports.
-- **Samples** (`samples/`) are generated; don't edit them by hand.
+- **Samples** (`samples/`) and **`guide.html`** are generated; don't edit them by hand. Edit `parent_readme.md`, then run `npm run guide`.
 
 ## Licence
 
