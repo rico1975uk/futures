@@ -26,7 +26,7 @@ test('documented counts match the code and data', () => {
 });
 
 test('docs link only to files that exist', () => {
-  for (const f of ['README.md', 'docs/METHODOLOGY.md', 'docs/DECISIONS.md', 'docs/DATA.md']) {
+  for (const f of ['README.md', 'parent_readme.md', 'docs/METHODOLOGY.md', 'docs/DECISIONS.md', 'docs/DATA.md']) {
     const dir = new URL(`../${f.includes('/') ? f.slice(0, f.lastIndexOf('/') + 1) : ''}`, import.meta.url);
     for (const [, href] of read(f).matchAll(/\]\(((?!https?:|#)[^)#\s]+)/g)) {
       assert.ok(fs.existsSync(new URL(href, dir)), `${f} links to missing ${href}`);

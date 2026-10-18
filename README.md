@@ -2,7 +2,7 @@
 
 A free, private decision aid for parents in the Bristol area. A parent describes their child in everyday terms, sets their family's priorities, shortlists schools and records what they see on visits. They get a personalised, evidence-based qualitative report, plus ready-made prompts to research further with their own AI assistant. Everything runs in the browser and nothing is sent anywhere.
 
-**Live:** https://rico1975uk.github.io/futures/ · **Sample reports:** https://rico1975uk.github.io/futures/samples/
+**Live:** https://rico1975uk.github.io/futures/ · **Sample reports:** https://rico1975uk.github.io/futures/samples/ · **For parents:** [plain-English guide](parent_readme.md)
 
 ## Run it locally
 
